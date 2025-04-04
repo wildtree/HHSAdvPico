@@ -55,3 +55,5 @@ Bus_SPI::init() の中で、_spi_regs というポインタにアクセスする
      _dma_ch = dma_ch;
      if (dma_ch >= 0)
 ```
+
+それはさておき、迅速に開発ができたのは間違いなくLovyanGFXのおかげです。らびやんさんに感謝！
