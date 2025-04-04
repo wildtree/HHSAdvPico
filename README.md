@@ -5,6 +5,13 @@ High High School Adventure for PicoCalc
 いつもの、ハイハイスクールアドベンチャーの移植版です。
 [PicoCalc](https://www.clockworkpi.com/picocalc) 向けのものです。
 
+## 遊び方
+ターゲットpico2 を選び、Raspberry Pi Pico2/2Wを入れたPicoCalcにビルドした firmware.uf2を書きこんでください。
+data フォルダの中身を、SDカードのルートフォルダにコピーしてください。
+ルートフォルダに `HHSAdv` というフォルダーが中身ごとコピーされるようにしてください。
+
+あとは、いつものように、さまよってください。
+
 ## 予定
 最初はおそらく Pico2/2W向けのものが出てくると思います。
 そのあと、Pico用のビルド情報が追加されて、気分が乗っていれば Pico W/2Wに液晶モジュールをつないで、BLEキーボードで遊べる奴が出てくるかもしれません。
