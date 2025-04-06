@@ -44,7 +44,7 @@ setup()
     SPI1.setTX(11);
     SPI1.setSCK(10);
     SPI1.setRX(12);
-    SPI1.setCS(22);
+    //SPI1.setCS(22);
     SPI1.begin();
     while (false == SD.begin(22, SPI1))
     {

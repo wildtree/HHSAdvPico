@@ -1,5 +1,39 @@
 #include <LGFX.h>
 
+#if defined(LCD28)
+namespace lgfx
+{
+ inline namespace v1
+ {
+//----------------------------------------------------------------------------
+
+  bool Light::init( uint8_t brightness )
+  {
+
+    gpio_init( _cfg.pin_bl );
+    gpio_set_dir( _cfg.pin_bl, GPIO_OUT );
+    gpio_put( _cfg.pin_bl, 1 );
+
+    setBrightness(brightness);
+
+    return true;
+  }
+
+  void Light::setBrightness( uint8_t brightness )
+  {
+    if (_cfg.invert) brightness = ~brightness;
+    // uint32_t duty = brightness + (brightness >> 7);
+    if (brightness == 0)
+        digitalWrite(_cfg.pin_bl, LOW);
+    else
+        digitalWrite(_cfg.pin_bl, HIGH);
+  }
+
+//----------------------------------------------------------------------------
+ }
+}
+#endif
+
 LGFX::LGFX()
 {
 #if defined(PICOCALC)
@@ -64,7 +98,7 @@ LGFX::LGFX()
         cfg.spi_host = 1;
         cfg.spi_mode = 0;
         cfg.freq_write = 40000000;
-        cfg.freq_read = 20000000;
+        cfg.freq_read = 6000000;
 
         cfg.pin_sclk = 10;
         cfg.pin_mosi = 11;
@@ -87,15 +121,15 @@ LGFX::LGFX()
 
         cfg.offset_x = 0;
         cfg.offset_y = 0;
-        cfg.offset_rotation = 0;
+        cfg.offset_rotation = 3;
 
         cfg.dummy_read_bits = 8;
         cfg.dummy_read_pixel = 1;
 
         cfg.readable = true;
 
-        cfg.invert = true;
-        cfg.rgb_order = false;
+        cfg.invert = false;
+        cfg.rgb_order = true;
 
         cfg.bus_shared = true;
 
@@ -106,7 +140,7 @@ LGFX::LGFX()
 
         cfg.pin_bl = 13;
         cfg.invert = false;
-        cfg.freq = 44100;
+        //cfg.freq = 44100;
 
         _light_instance.config(cfg);
         _panel_instance.setLight(&_light_instance);

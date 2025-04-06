@@ -5,9 +5,8 @@
 #define VSCROLL_H
 
 #include <Arduino.h>
-#include <vscroll.h>
+#include <graph.h>
 #include <LovyanGFX.hpp>
-
 
 class ZVScroll
 {
