@@ -38,124 +38,68 @@ public:
 class PicoCalcKeyBoard : public KeyBoard
 {
 public:
-    PicoCalcKeyBoard() : KeyBoard(), _i2c_inited(1), _keycheck(0) 
-    {
-#if 0
-        Wire1.setSCL(I2C_KBD_SCL);
-        Wire1.setSDA(I2C_KBD_SDA);
-        Wire1.setClock(I2C_KBD_SPEED);
-
-        Wire1.begin();
-#else
-        gpio_set_function(I2C_KBD_SCL, GPIO_FUNC_I2C);
-        gpio_set_function(I2C_KBD_SDA, GPIO_FUNC_I2C);
-        i2c_init(I2C_KBD_MOD, I2C_KBD_SPEED);
-        gpio_pull_up(I2C_KBD_SCL);
-        gpio_pull_up(I2C_KBD_SDA);
-#endif
-    }
+    PicoCalcKeyBoard();
     ~PicoCalcKeyBoard() {}
 
-    bool wait_any_key() override
-    {
-        bool r = false;
-        int k = _read_i2c_kbd();
-        if (k > 0)
-        {
-            r = true;
-        }
-        return r;
-    }
-    bool fetch_key(uint8_t &c) override
-    {
-        int k = _read_i2c_kbd();
-        bool r = false;
-        if (k > 0)
-        {
-            c = (uint8_t)k;
-            r = true;
-        }
-        return r;
-    }
+    bool wait_any_key() override;
+    bool fetch_key(uint8_t &c) override;
     bool exists() override { return true; }
 
     inline kbd_type_t keyboard_type() override { return picocalc; }
 protected:
-    int _write_i2c_kbd() 
-    {
-        int retval;
-        unsigned char msg[2];
-        msg[0] = 0x09;
-    
-        if(_i2c_inited == 0) return -1;
-    
-        retval = i2c_write_timeout_us(I2C_KBD_MOD, I2C_KBD_ADDR, msg, 1, false, 500000);
-        if ( retval == PICO_ERROR_GENERIC || retval == PICO_ERROR_TIMEOUT) {
-            Serial.printf( "i2c write error\r\n");
-            return -1;
-        }
-        return 0;
-    }
-    int _read_i2c_kbd() 
-    {
-        int retval;
-        static int ctrlheld = 0;
-        uint16_t buff = 0;
-        unsigned char msg[2];
-        int c  = -1;
-        msg[0] = 0x09;
-
-        if(_i2c_inited == 0) return -1;
-
-        if(_keycheck == 0)
-        {
-            retval = _write_i2c_kbd();
-            _keycheck = 1;
-            return retval;
-        }
-        else 
-        {
-            retval = i2c_read_timeout_us(I2C_KBD_MOD, I2C_KBD_ADDR, (unsigned char *) &buff, 2, false, 500000);
-            if (retval == PICO_ERROR_GENERIC || retval == PICO_ERROR_TIMEOUT) 
-            {
-                Serial.printf("i2c read error read\n");
-                return -1;
-            }
-            _keycheck = 0;
-        }
-        if(buff != 0) 
-        {
-            if (buff == 0xA503) ctrlheld = 0;
-            else if (buff == 0xA502) 
-            {
-                ctrlheld = 1;
-            }
-            else if((buff & 0xff) == 1) 
-            {//pressed
-                c = buff >> 8;
-                int realc = -1;
-                switch (c) 
-                {
-                case 0xA1:
-                case 0xA2:
-                case 0xA3:
-                case 0xA4:
-                case 0xA5:
-                    realc = -1;//skip shift alt ctrl keys
-                    break;
-                default:
-                    realc = c;
-                    break;
-                }
-                c = realc;
-                if(c >= 'a' && c <= 'z' && ctrlheld) c = c - 'a' + 1;
-            }
-            return c;
-        }
-        return -1;
-    }
+    int _write_i2c_kbd(); 
+    int _read_i2c_kbd(); 
     uint8_t _i2c_inited;
     uint8_t _keycheck;
 };
+
+#if defined(BLEKBD)
+
+#include <NimBLEDevice.h>
+
+
+class  ClientCallbacks : public NimBLEClientCallbacks
+{
+    void onConnect(NimBLEClient* pClient) override;
+    void onDisconnect(NimBLEClient* pClient) override;
+    bool onConnParamsUpdateRequest(NimBLEClient* pClient, const ble_gap_upd_params* params) override;
+
+    uint32_t onPassKeyRequest () override;
+    bool onConfirmPIN(uint32_t pin) override;
+    void onAuthenticationComplete(ble_gap_conn_desc *desc) override;
+};
+
+class AdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks
+{
+    void onResult(NimBLEAdvertisedDevice *advertisedDevice) override;
+};
+
+class BTKeyBoard : public KeyBoard
+{
+protected:
+    std::queue<uint8_t> _buf;
+    static const uint8_t _keymap[][96];
+    bool connectToServer();
+    void begin();
+    void update();
+public:
+    BTKeyBoard() : KeyBoard()
+    {
+        begin();
+    }
+    virtual ~BTKeyBoard() {}
+    virtual bool wait_any_key() override;
+    virtual bool fetch_key(uint8_t &c) override;
+    virtual bool exists() override;
+    virtual inline kbd_type_t keyboard_type() override { return ble; }
+
+    static const char *HID_SERVICE;
+    static const char *HID_REPORT_DATA;
+
+    static const uint32_t scanTime;
+};
+
+
+#endif
 
 #endif

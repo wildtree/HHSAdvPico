@@ -33,7 +33,19 @@ ZSystem::ZSystem()
     _cv = new Canvas(_display, 32, 8, 256, 152);
     _zvs = new ZVScroll(_display, 160, 16);
     _prompt = new ZVScroll(_display, SCRN_HEIGHT - 16, 0);
+#if defined(PICOCALC)
     _keyboard = new PicoCalcKeyBoard;
+#elif defined(BLEKBD)
+    _prompt->cls();
+    _prompt->setFont(&fonts::lgfxJapanGothic_16);
+    _prompt->setTextColor(BLUE);
+    _prompt->print("Connecting to BLE Keyboard...");
+    _prompt->invalidate();
+
+    Serial.println("Connect to BLE Keybord.");
+    _keyboard = new BTKeyBoard;
+    _prompt->cls();
+#endif
     _dialog = new Dialog(_display);
     _display->clear();
     Serial1.println("Initialized.");
@@ -643,6 +655,10 @@ void
 ZSystem::loop(void)
 {
     //Serial1.printf("Stack size = %d\r\n", uxTaskGetStackHighWaterMark(nullptr));
+    uint32_t free_heap = rp2040.getFreeHeap();
+    uint32_t free_stack = rp2040.getFreeStack();
+    Serial.printf("Heap = 0x%8x / Stack = 0x%8x\r\n", free_heap, free_stack);
+    
     blekbdchk();
     prompt();
     if (_mode != Play)

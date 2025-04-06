@@ -24,6 +24,7 @@ void
 setup() 
 {
     //Serial1.begin(115200);
+    rp2040.begin();
     ZSystem &game = ZSystem::getInstance(); // game system
     // initialize SD interface
     //Serial1.println("HHSAdv PicoCalc Start ...");

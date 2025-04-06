@@ -128,8 +128,8 @@ LGFX::LGFX()
 
         cfg.readable = true;
 
-        cfg.invert = false;
-        cfg.rgb_order = true;
+        cfg.invert = true;
+        cfg.rgb_order = false;
 
         cfg.bus_shared = true;
 
