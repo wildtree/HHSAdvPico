@@ -67,9 +67,14 @@ void
 ZVScroll::print(const String &s)
 {
     //Serial1.printf("String: '%s' (length = %d)\n", s.c_str(), s.length());
-    for (int i = 0 ; i < s.length() ; i++)
+    String t = s;
+    while (t.indexOf("−") > 0)
     {
-        uint8_t c = s[i];
+        t.replace("−", "～");
+    }
+    for (int i = 0 ; i < t.length() ; i++)
+    {
+        uint8_t c = t[i];
         //Serial1.printf("idx = %d (code = %#02x) (%d,%d)\n", i, c, _tx, _ty);
         if (isascii(c))
         {
@@ -78,11 +83,11 @@ ZVScroll::print(const String &s)
                 scrollLine();
             }
             _canvas->setFont(&fonts::AsciiFont8x16);
-            _tx += _canvas->drawChar(s[i], _tx, _ty, 2);
+            _tx += _canvas->drawChar(t[i], _tx, _ty, 2);
         }
         else if (c >= 0x80 && c <= 0xbf) // UTF-8 letters (2nd or later byte letters)
         {
-            _canvas->print(s[i]);
+            _canvas->print(t[i]);
         }
         else
         {
@@ -92,7 +97,7 @@ ZVScroll::print(const String &s)
             }
             _canvas->setFont(&fonts::lgfxJapanGothic_16);
             _canvas->setCursor(_tx, _ty);
-            _canvas->print(s[i]);
+            _canvas->print(t[i]);
             _tx += FontWidth * 2;
         }
     }

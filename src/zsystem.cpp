@@ -7,6 +7,7 @@
 //#include <Wire.h>
 #include <zsystem.h>
 #include <dialog.h>
+#include <screenshot.h>
 
 const String ZSystem::_credit[] = {
     "ハイハイスクールアドベンチャー",
@@ -35,16 +36,8 @@ ZSystem::ZSystem()
     _prompt = new ZVScroll(_display, SCRN_HEIGHT - 16, 0);
 #if defined(PICOCALC)
     _keyboard = new PicoCalcKeyBoard;
-#elif defined(BLEKBD)
-    _prompt->cls();
-    _prompt->setFont(&fonts::lgfxJapanGothic_16);
-    _prompt->setTextColor(BLUE);
-    _prompt->print("Connecting to BLE Keyboard...");
-    _prompt->invalidate();
-
-    Serial.println("Connect to BLE Keybord.");
-    _keyboard = new BTKeyBoard;
-    _prompt->cls();
+#elif defined(USBKBD)
+    _keyboard = new USBKeyBoard;
 #endif
     _dialog = new Dialog(_display);
     _display->clear();
@@ -657,7 +650,13 @@ ZSystem::loop(void)
     //Serial1.printf("Stack size = %d\r\n", uxTaskGetStackHighWaterMark(nullptr));
     uint32_t free_heap = rp2040.getFreeHeap();
     uint32_t free_stack = rp2040.getFreeStack();
-    Serial.printf("Heap = 0x%8x / Stack = 0x%8x\r\n", free_heap, free_stack);
+    //Serial.printf("Heap = 0x%8x / Stack = 0x%8x\r\n", free_heap, free_stack);
+#ifdef USBKBD
+    if (_keyboard->keyboard_type() == KeyBoard::usb)
+    {
+        tuh_task();
+    }
+#endif
     
     blekbdchk();
     prompt();
@@ -687,6 +686,11 @@ ZSystem::loop(void)
         if (_keyboard->fetch_key(c))
         {
 
+            if (c == '\x13')
+            {
+                ScreenShot::instance().take(_display);
+                return;
+            }
             String cmd = _le->putChar(c);
             if (c == '\r' || c == '\n')
             {

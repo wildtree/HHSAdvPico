@@ -2,7 +2,7 @@
 
 #include <keyboard.h>
 
-
+#ifdef PICOCALC
 PicoCalcKeyBoard::PicoCalcKeyBoard()
     : KeyBoard(), _i2c_inited(1), _keycheck(0) 
 {
@@ -123,6 +123,237 @@ PicoCalcKeyBoard::_read_i2c_kbd()
     }
     return -1;
 }
+#endif
+
+#ifdef USBKBD
+#ifdef TUH_OPT_HIGH_SPEED
+#undef TUH_OPT_HIGH_SPEED
+#endif
+#define TUH_OPT_HIGH_SPEED 0 // FULL speed mode
+
+#include <tusb.h>
+#include <queue>
+
+#define MAX_REPORT 4
+static struct {
+  uint8_t report_count;
+  tuh_hid_report_info_t report_info[MAX_REPORT];
+} hid_info[CFG_TUH_HID];
+
+// Adafruit_USBH_Host USBHost;
+static uint8_t const keycode2ascii[128][2] = { HID_KEYCODE_TO_ASCII };
+std::queue<uint8_t> keybuf; // キーコードを格納するキュー
+//static semaphore_t keybuf_sem = { 0 };
+
+
+static inline bool 
+find_key_in_report(hid_keyboard_report_t const *report, uint8_t keycode) 
+{
+    // 前回のレポートにキーコードが存在するかを確認する関数
+    for (int i = 0; i < 6; i++) {
+        if (report->keycode[i] == keycode) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void 
+process_kbd_report(hid_keyboard_report_t const *report) 
+{
+    // キーボードのレポートを処理する関数
+    static hid_keyboard_report_t prev_report = { 0, 0, {0} }; // 前回のレポートを保存する変数
+    // report->keycode[]にキーコードが格納されている
+    for (int i = 0; i < 6; i++) 
+    {
+        if (report->keycode[i] != 0) 
+        {
+            //Serrial1.printf("Key Pressed: %d\r\n", report->keycode[i]);
+            if (find_key_in_report(&prev_report, report->keycode[i])) 
+            {
+                // 前回のレポートに同じキーが存在する場合、キーは押され続けている
+            } 
+            else 
+            {
+                // 前回のレポートに同じキーが存在しない場合、キーが押された
+                bool is_shift = report->modifier & (KEYBOARD_MODIFIER_LEFTSHIFT | KEYBOARD_MODIFIER_RIGHTSHIFT);
+                uint8_t ch = keycode2ascii[report->keycode[i]][is_shift ? 1 : 0];
+                if (ch == 0) 
+                {
+                    // キーコードが無効な場合、何もしない
+                    continue;
+                }
+                //sem_acquire_blocking(&keybuf_sem); // セマフォを取得
+                keybuf.push(ch); // キーコードをキューに追加
+                //sem_release(&keybuf_sem); // セマフォを解放
+                //Serrial1.printf("Key Pressed: %c\r\n", ch);
+            }
+        }
+    }
+    prev_report = *report; // 現在のレポートを保存
+}
+
+void 
+process_mouse_report(hid_mouse_report_t const * report) 
+{
+    // マウスのレポートを処理する関数
+    static hid_mouse_report_t prev_report = { 0 };
+    uint8_t button_changed_mask = report->buttons ^ prev_report.buttons;
+    if (button_changed_mask & report->buttons) 
+    {
+        //Serrial1.printf("Mouse Button: %c%c%c\r\n",
+        //    report->buttons & MOUSE_BUTTON_LEFT ? 'L' : '-',
+        //    report->buttons & MOUSE_BUTTON_MIDDLE ? 'M' : '-',
+        //    report->buttons & MOUSE_BUTTON_RIGHT ? 'R' : '-');
+    }
+    //Serrial1.printf("Mouse Movement: (%d, %d, %d)\r\n", report->x, report->y, report->wheel);
+    prev_report = *report; // 現在のレポートを保存
+}
+
+void 
+process_generic_report(uint8_t dev_addr,uint8_t instance, uint8_t const *report, uint16_t len)
+{
+    // 一般的なレポートを処理する関数
+    uint8_t const rpt_count = hid_info[instance].report_count;
+    tuh_hid_report_info_t *rpt_info_arr = hid_info[instance].report_info;
+    tuh_hid_report_info_t *rpt_info = NULL;
+
+    if (rpt_count == 1 && rpt_info_arr[0].report_id == 0) 
+    {
+        // 単純なレポート
+        rpt_info = &rpt_info_arr[0];
+    } 
+    else 
+    {
+        // 複合レポート
+        uint8_t const rpt_id = report[0];
+        for (uint8_t i = 0; i < rpt_count; i++) 
+        {
+            if (rpt_id == rpt_info_arr[i].report_id) 
+            {
+                rpt_info = &rpt_info_arr[i];
+                break;
+            }
+        }
+        report++;
+        len--;
+    }
+
+    if (!rpt_info) 
+    {
+        //Serrial1.printf("Couldn't find report info!\r\n");
+        return;
+    }
+
+    // レポートの内容を表示
+    //Serrial1.printf("Generic Report: ID %d, Length %d\r\n", rpt_info->report_id, len);
+}
+
+void 
+my_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_report, uint16_t desc_len) 
+{
+    //Serrial1.printf("HID device address = %d, instance = %d is mounted\r\n", dev_addr, instance);
+  
+    // Interface protocol (hid_interface_protocol_enum_t)
+    const char *protocol_str[] = {"None", "Keyboard", "Mouse"};
+    uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
+  
+    //Serrial1.printf("HID Interface Protocol = %s\r\n", protocol_str[itf_protocol]);
+  
+    // By default host stack will use activate boot protocol on supported interface.
+    // Therefore for this simple example, we only need to parse generic report descriptor (with built-in parser)
+    if (itf_protocol == HID_ITF_PROTOCOL_NONE) 
+    {
+      hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
+      //Serrial1.printf("HID has %u reports \r\n", hid_info[instance].report_count);
+    }
+  
+    // request to receive report
+    // tuh_hid_report_received_cb() will be invoked when report is available
+    if (!tuh_hid_receive_report(dev_addr, instance)) 
+    {
+      //Serrial1.printf("Error: cannot request to receive report\r\n");
+    }
+}
+  
+// Invoked when device with hid interface is un-mounted
+void 
+my_hid_umount_cb(uint8_t dev_addr, uint8_t instance) 
+{
+    //Serrial1.printf("HID device address = %d, instance = %d is unmounted\r\n", dev_addr, instance);
+}
+  
+void 
+my_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *report, uint16_t len)
+{
+    uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
+    if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) 
+    {
+        // Process keyboard report
+        process_kbd_report((hid_keyboard_report_t const *) report);
+    } 
+    else if (itf_protocol == HID_ITF_PROTOCOL_MOUSE) 
+    {
+        // Process mouse report
+        process_mouse_report((hid_mouse_report_t const *) report);
+    } 
+    else 
+    {
+        // Process generic report
+        process_generic_report(dev_addr, instance, report, len);
+    }
+    // Request to receive next report
+    if (!tuh_hid_receive_report(dev_addr, instance)) 
+    {
+        //Serrial1.printf("Error: cannot request to receive report\r\n");
+    }
+}
+
+//static void
+//core1_entry()
+//{
+//    tuh_task();
+//}
+
+USBKeyBoard::USBKeyBoard()
+    : KeyBoard()
+{
+    //Serial.println("USB keyboard initialized.");
+    tuh_init(0);    // Initialize TinyUSB stack
+    //sem_init(&keybuf_sem, 1, 1); // Initialize semaphore for key buffer
+    //multicore_launch_core1(core1_entry);
+}
+
+void
+USBKeyBoard::update()
+{
+    // Poll USB host stack
+    tuh_task();
+}
+
+bool
+USBKeyBoard::wait_any_key()
+{
+    update();
+    if (keybuf.empty()) return false;
+    //sem_acquire_blocking(&keybuf_sem); // Acquire semaphore for key buffer
+    keybuf.pop(); // just drop one key stroke.
+    //sem_release(&keybuf_sem); // Release semaphore for key buffer
+    return true;
+}
+
+bool
+USBKeyBoard::fetch_key(uint8_t &c)
+{
+    update();
+    if (keybuf.empty()) return false;
+    //sem_acquire_blocking(&keybuf_sem); // Acquire semaphore for key buffer
+    c = keybuf.front();
+    keybuf.pop();
+    //sem_release(&keybuf_sem); // Release semaphore for key buffer
+    return true;
+}
+#endif
 
 #if defined(BLEKBD)
 
