@@ -87,48 +87,33 @@ public:
 
 #if defined(BLEKBD)
 
-#include <NimBLEDevice.h>
+#include <btstack.h>
+#include <ble/gatt_client.h>
+#include <ad_parser.h>
+#include <ble/sm.h>
+#include <btstack_event.h>
+#include <btstack_util.h>
 
+#include <btstack_memory.h>
+#include <hci_dump.h>
+#include <btstack_config.h>
+#include <btstack_memory.h>
 
-class  ClientCallbacks : public NimBLEClientCallbacks
-{
-    void onConnect(NimBLEClient* pClient) override;
-    void onDisconnect(NimBLEClient* pClient) override;
-    bool onConnParamsUpdateRequest(NimBLEClient* pClient, const ble_gap_upd_params* params) override;
-
-    uint32_t onPassKeyRequest () override;
-    bool onConfirmPIN(uint32_t pin) override;
-    void onAuthenticationComplete(ble_gap_conn_desc *desc) override;
-};
-
-class AdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks
-{
-    void onResult(NimBLEAdvertisedDevice *advertisedDevice) override;
-};
-
-class BTKeyBoard : public KeyBoard
+class BLEKeyBoard : public KeyBoard
 {
 protected:
-    std::queue<uint8_t> _buf;
-    static const uint8_t _keymap[][96];
-    bool connectToServer();
-    void begin();
-    void update();
+    static bool _initialied;
+    static  void begin();
 public:
-    BTKeyBoard() : KeyBoard()
+    BLEKeyBoard() : KeyBoard()
     {
-        begin();
+        if (!BLEKeyBoard::_initialied) begin();
     }
-    virtual ~BTKeyBoard() {}
+    virtual ~BLEKeyBoard() {}
     virtual bool wait_any_key() override;
     virtual bool fetch_key(uint8_t &c) override;
-    virtual bool exists() override;
+    virtual bool exists() override { return true; }
     virtual inline kbd_type_t keyboard_type() override { return ble; }
-
-    static const char *HID_SERVICE;
-    static const char *HID_REPORT_DATA;
-
-    static const uint32_t scanTime;
 };
 
 

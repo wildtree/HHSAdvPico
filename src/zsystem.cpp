@@ -38,6 +38,8 @@ ZSystem::ZSystem()
     _keyboard = new PicoCalcKeyBoard;
 #elif defined(USBKBD)
     _keyboard = new USBKeyBoard;
+#elif defined(BLEKBD)
+    _keyboard = new BLEKeyBoard;
 #endif
     _dialog = new Dialog(_display);
     _display->clear();

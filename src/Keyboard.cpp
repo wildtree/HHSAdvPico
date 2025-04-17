@@ -357,348 +357,548 @@ USBKeyBoard::fetch_key(uint8_t &c)
 
 #if defined(BLEKBD)
 
-// Bluetooth keyboard handler (NimBLE)
+// Define ATT_ERROR_SECURITY_ERROR if not already defined
+#ifndef ATT_ERROR_SECURITY_ERROR
+#define ATT_ERROR_SECURITY_ERROR 0x0E // Replace 0x0E with the correct error code if needed
+#endif
 
-static volatile bool connected = false;
-static volatile bool nonsecure = false;
+#include <queue>
+#include <list>
 
-static const int MAX_KEYCODE = 96;
+#ifndef AD_DATA_ITERATOR_T_DEFINED
+#define AD_DATA_ITERATOR_T_DEFINED
+typedef struct 
+{
+    const uint8_t *data;
+    uint16_t size;
+    uint16_t offset;
+} ad_data_iterator_t;
+#endif
 
-const char *BTKeyBoard::HID_SERVICE = "1812";
-//const char *BTKeyBoard::HID_REPORT_MAP = "2A48";
-const char *BTKeyBoard::HID_REPORT_DATA = "2A4D";
-const uint8_t BTKeyBoard::_keymap[][MAX_KEYCODE] = {
-    {    0,   0,   0,   0, 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
-       'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '1', '2',
-       '3', '4', '5', '6', '7', '8', '9', '0',  13,  27,   8,   9, ' ', '-', '=', '[',
-       ']','\\',   0, ';','\'', '`', ',', '.', '/',   0,   0,   0,   0,   0,   0,   0,
-         0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 127,   0,   0,   0,
-         0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-    },
-    {
-         0,   0,   0,   0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,
-        13,  14,  15,  16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,   0,   0,
-         0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-         0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-         0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-         0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-    },
-    {
-         0,   0,   0,   0, 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L',
-       'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '!', '@',
-       '#', '$', '%', '^', '&', '*', '(', ')',  13,  27,   8,   9, ' ', '_', '+', '{',
-       '}', '|',   0, ':', '"', '~', '<', '>', '?',   0,   0,   0,   0,   0,   0,   0,
-         0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 127,   0,   0,   0,
-         0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-    },
-};
+// 定数定義
 
-const uint32_t BTKeyBoard::scanTime = 0 * 1000; // in milliseconds (0 = forever)
+static bd_addr_t keyboard_address;
+static int found_hid_device = 0;
+static hci_con_handle_t keyboard_handle = 0;
+static gatt_client_service_t hid_service;
+static bool hid_characteristics_scan_completed = false;
+static std::list<gatt_client_characteristic_t> hid_characteristics;
+static std::list<gatt_client_characteristic_descriptor_t> hid_descriptors;
+static std::list<gatt_client_characteristic_t>::iterator hid_characteristic_it;
+static std::list<gatt_client_characteristic_descriptor_t>::iterator hid_descriptor_it;
+static gatt_client_characteristic_t cur_characteristic;
+
+static gatt_client_characteristic_descriptor_t gatt_cccd_descriptor;
+static uint8_t notification_enable[] = {0x01, 0x00}; // 通知を有効化する値
+
+static btstack_packet_callback_registration_t hci_event_callback_registration;
+static btstack_packet_callback_registration_t sm_event_callback_registration;
+
+static gatt_client_notification_t notification_listener;
+
+const uint32_t FIXED_PASSKEY = 123456U; // パスキーの固定値
+const uint16_t HID_SERVICE_UUID = 0x1812;
+const uint16_t HID_REPORT_ID = 0x2a4d; // HID Report ID
+
+// callback
+static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
+static void handle_gatt_descriptors_discovered(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
 
 typedef union {
-    struct __attribute__((__packed__))
-    {
-        uint8_t modifiers;
-        uint8_t keys[10];
-    } k1;
-    struct __attribute__((__packed__))
-    {
-        uint8_t modifiers;
-        uint8_t reserved;
-        uint8_t keys[6];
-        uint8_t padding[3];
-    } k2;
-    uint8_t raw[11];
+  struct __attribute__((__packed__))
+  {
+      uint8_t modifiers;
+      uint8_t keys[10];
+  } k1;
+  struct __attribute__((__packed__))
+  {
+      uint8_t modifiers;
+      uint8_t reserved;
+      uint8_t keys[6];
+      uint8_t padding[3];
+  } k2;
+  uint8_t raw[11];
 } keyboard_t;
 
-
 static keyboard_t keyboardReport;
-static std::queue<uint16_t> keybuf;
+static std::queue<uint8_t> keybuf;
+static const int MAX_KEYCODE = 96;
+const uint8_t keymap[][MAX_KEYCODE] = {
+  {    0,   0,   0,   0, 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
+     'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '1', '2',
+     '3', '4', '5', '6', '7', '8', '9', '0',  13,  27,   8,   9, ' ', '-', '=', '[',
+     ']','\\',   0, ';','\'', '`', ',', '.', '/',   0,   0,   0,   0,   0,   0,   0,
+       0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 127,   0,   0,   0,
+       0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+  },
+  {
+       0,   0,   0,   0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,
+      13,  14,  15,  16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,   0,   0,
+       0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+       0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+       0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+       0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+  },
+  {
+       0,   0,   0,   0, 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L',
+     'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '!', '@',
+     '#', '$', '%', '^', '&', '*', '(', ')',  13,  27,   8,   9, ' ', '_', '+', '{',
+     '}', '|',   0, ':', '"', '~', '<', '>', '?',   0,   0,   0,   0,   0,   0,   0,
+       0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 127,   0,   0,   0,
+       0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+  },
+};
 
+// Define the ad_data_iterator_next function
+static int 
+ad_data_iterator_next(ad_data_iterator_t *it) 
+{
+  if (it->offset >= it->size) return 0;
+  uint8_t field_length = it->data[it->offset];
+  it->offset += field_length + 1;
+  return it->offset < it->size;
+}
+
+// 広告パケットを解析してHID UUIDを確認
+static void 
+scan_advertisements(const uint8_t *packet, uint16_t size) 
+{
+    ad_data_iterator_t ad_iter;
+    uint16_t uuid;
+    
+    // 広告データの反復処理
+    for (ad_iter.data = packet, ad_iter.size = size, ad_iter.offset = 0 ; ad_iter.offset < ad_iter.size ; ad_data_iterator_next(&ad_iter)) 
+    {
+      if (ad_iter.data[ad_iter.offset + 1] == BLUETOOTH_DATA_TYPE_COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS ||
+          ad_iter.data[ad_iter.offset + 1] == BLUETOOTH_DATA_TYPE_INCOMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS) 
+      {
+        uuid = little_endian_read_16(&ad_iter.data[ad_iter.offset + 2], 0);
+        if (uuid == HID_SERVICE_UUID) 
+        {
+          found_hid_device = 1;
+          break;
+        }
+      }
+    }
+}
+
+// 通知を受け取るハンドラ
+static void 
+notification_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) 
+{
+  if (packet_type != HCI_EVENT_PACKET) return;
+  switch (hci_event_packet_get_type(packet)) 
+  {
+    case GATT_EVENT_NOTIFICATION:
+      {
+        // 通知を受信した場合の処理
+        uint16_t attribute_handle = gatt_event_notification_get_handle(packet);
+        uint16_t value_length = gatt_event_notification_get_value_length(packet);
+        const uint8_t *value = gatt_event_notification_get_value(packet);
+        uint16_t value_handle = gatt_event_notification_get_value_handle(packet);
+        uint16_t service_id = gatt_event_notification_get_service_id(packet);
+        if (attribute_handle == 0x0040)
+        {
+          if (value_length == 0) return; // データがない場合は無視
+          if (value_length == 8 || value_length == 11)
+          {
+            keyboard_t *newKeyReport = (keyboard_t*)value;
+            int buflen = 6;
+            uint8_t *buf = keyboardReport.k2.keys;
+            uint8_t *input = newKeyReport->k2.keys;
+            uint8_t mod = newKeyReport->k2.modifiers;
+            if (value_length == 11)
+            {
+              buflen = 10;
+              buf = keyboardReport.k1.keys;
+              input = newKeyReport->k1.keys;
+              mod = newKeyReport->k1.modifiers;     
+            }
+            for (int i = 0 ; i < buflen ; i++)
+            {
+              uint8_t c = input[i];
+              if (c == 0) continue;
+              if (mod == 3) mod = 1;
+              uint8_t ch = keymap[mod][c];
+              if (ch == 0) continue;
+              if (memchr(buf, c, buflen) == NULL) keybuf.push(ch);
+            }
+            memcpy(&keyboardReport, value, value_length);
+          }
+        }
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+// CCCDにNotificationを要求し完了した
 static void
-notifyCallback(NimBLERemoteCharacteristic *pRemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)
+handle_gatt_noification_activated(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
 {
-#if 0
-    std::string str = (isNotify == true) ? "Notification" : "Indication";
-    str += " from ";
-    str += pRemoteCharacteristic->getRemoteService()->getClient()->getPeerAddress().toString();
-    str += ": Service = " + pRemoteCharacteristic->getRemoteService()->getUUID().toString();
-    str += ", Characteristic = " + pRemoteCharacteristic->getUUID().toString();
-    str += ", Handle " + pRemoteCharacteristic->getHandle();
-    Serial.println(str.c_str());
-    Serial.printf("Length: %d, Handle: %d\r\n", length, pRemoteCharacteristic->getHandle());
-    Serial.print("\r\ndata: ");
-    for (int i = 0; i < length; i++) {
-        // uint8_tを頭0のstringで表示する
-        Serial.printf("%02X ", pData[i]);
-    }
-    Serial.print("\r\n");
-#endif
-    // handle: 41 -- key / 51 -- media key
-    if (length != 8 && length != 11) return; // not key data interface (maybe)
-    keyboard_t *newKeyReport = (keyboard_t*)pData;
-    int buflen = 6;
-    uint8_t *buf = keyboardReport.k2.keys;
-    uint8_t *input = newKeyReport->k2.keys;
-    uint8_t mod = newKeyReport->k2.modifiers;
-    if (length == 11)
-    {
-        buflen = 10;
-        buf = keyboardReport.k1.keys;
-        input = newKeyReport->k1.keys;
-        mod = newKeyReport->k1.modifiers;
-    }
-    for (int i = 0 ; i < buflen ; i++)
-    {
-        uint8_t c = input[i];
-        if (c == 0) continue;
-        if (memchr(buf, c, buflen) == NULL) keybuf.push(((uint16_t)mod << 8)|c);
-    }
-    memcpy(&keyboardReport, pData, length);
-}
-
-void
-ClientCallbacks::onConnect(NimBLEClient* pClient)
-{
-    Serial.println("BLE Device connected.");
-    memset(&keyboardReport, 0, sizeof(keyboardReport));
-    pClient->updateConnParams(120, 120, 0, 60);
-    connected = true;
-}
-
-void
-ClientCallbacks::onDisconnect(NimBLEClient* pClient)
-{
-    Serial.print(pClient->getPeerAddress().toString().c_str());
-    Serial.println(" disconnected");
-    connected = false;
-}
-
-bool
-ClientCallbacks::onConnParamsUpdateRequest(NimBLEClient* pClient, const ble_gap_upd_params* params)
-{
-    return true;
-}
-
-uint32_t
-ClientCallbacks::onPassKeyRequest()
-{
-    Serial.println("Client passkey required.");
-    return 123456;
-}
-
-bool
-ClientCallbacks::onConfirmPIN(uint32_t pin)
-{
-    Serial.print("The passkey number: ");
-    Serial.println(pin);
-    return true; //pin == 123456;
-}
-
-void
-ClientCallbacks::onAuthenticationComplete(ble_gap_conn_desc *desc)
-{
-    if (!desc->sec_state.encrypted)
-    {
-      Serial.println("Encrypt connection failed - disconnecting");
-      /** Find the client with the connection handle provided in desc */
-      NimBLEDevice::getClientByID(desc->conn_handle)->disconnect();
-    }
-}
-
-static NimBLEAdvertisedDevice *advDevice = nullptr;
-static bool doConnect = false;
-
-
-void
-AdvertisedDeviceCallbacks::onResult(NimBLEAdvertisedDevice *advertisedDevice)
-{
-    if (advertisedDevice->haveServiceUUID() && advertisedDevice->isAdvertisingService((NimBLEUUID)BTKeyBoard::HID_SERVICE))
-    {
-        Serial.print("Advertised HID Device found: ");
-        Serial.println(advertisedDevice->toString().c_str());
-
-        NimBLEDevice::getScan()->stop();
-        advDevice = advertisedDevice;
-        nonsecure = (advDevice->getName() == "M5-Keyboard");
-        doConnect = true;
-        if (nonsecure)
-        {
-            Serial.printf("Keyboard: '%s' does not support secure connection.\r\n", advDevice->getName().c_str());
-        }
-    }
-}
-
-bool
-BTKeyBoard::connectToServer()
-{
-    NimBLEClient *pClient = nullptr;
-    Serial.println("Start connecting to server...");
-    if (NimBLEDevice::getClientListSize())
-    {
-        pClient = NimBLEDevice::getClientByPeerAddress(advDevice->getAddress());
-        if (pClient)
-        {
-            if (!pClient->connect(advDevice, false))
+  if (packet_type != HCI_EVENT_PACKET) return;
+  switch (hci_event_packet_get_type(packet)) 
+  {
+    case GATT_EVENT_QUERY_COMPLETE:
+      {
+        uint16_t status = gatt_event_query_complete_get_att_status(packet); // Replace with the correct function
+        if (status != 0) {
+          Serial.printf("GATT Notification activation failed with status %u\n", status);
+        } else {
+          uint16_t service_id = gatt_event_query_complete_get_service_id(packet); // Retrieve service ID
+          uint16_t handle = gatt_event_query_complete_get_handle(packet); // Retrieve handle
+          hci_con_handle_t connection_handle = gatt_event_query_complete_get_handle(packet); // Retrieve connection handle
+          while (hid_descriptor_it != hid_descriptors.end())
+          {
+            uint16_t uuid16 = hid_descriptor_it->uuid16;
+            if (uuid16 == 0)
             {
-                Serial.println("Failed to reconnect.");
-                return false;
+              uuid16 = little_endian_read_16(hid_descriptor_it->uuid128, 0);
             }
-            if (!nonsecure && !pClient->secureConnection())
+            if (uuid16 == 0x2902) // UUIDがClient Characteristic Configurationの場合
             {
-                Serial.println("Failed to establish secure connection.");
+              gatt_cccd_descriptor = *hid_descriptor_it++; // Client Characteristic Configuration Descriptorを保存
+              // Notificationを有効化する値を書き込む
+              gatt_client_write_value_of_characteristic(&handle_gatt_noification_activated, connection_handle, gatt_cccd_descriptor.handle, sizeof(notification_enable), notification_enable);
+              break;
             }
-            Serial.println("Reconnected.");
-        }
-        else
-        {
-            pClient = NimBLEDevice::getDisconnectedClient();
-        }
-    }
-
-    if (!pClient)
-    {
-        if (NimBLEDevice::getClientListSize() >= NIMBLE_MAX_CONNECTIONS)
-        {
-            Serial.println("No more connection.");
-            return false;
-        }
-        pClient = NimBLEDevice::createClient();
-        Serial.println("A new client created.");
-        pClient->setClientCallbacks(new ClientCallbacks(), false);
-        pClient->setConnectionParams(12, 12, 0, 51);
-        pClient->setConnectTimeout(5); // 5sec
-        if (!pClient->connect(advDevice))
-        {
-            NimBLEDevice::deleteClient(pClient);
-            Serial.println("Failed to connect.");
-            return false;
-        }
-        if (!nonsecure && !pClient->secureConnection())
-        {
-            Serial.println("Failed to establish secure connection.");
-            return false;
-        }
-
-    }
-    if (!pClient->isConnected())
-    {
-        if (!pClient->connect(advDevice))
-        {
-            Serial.println("Failed to connect.");
-            return false;
-        }
-        if (!nonsecure && !pClient->secureConnection())
-        {
-            Serial.println("Failed to establish secure connection.");
-            return false;
-        }
-    }
-    Serial.print("Connected to ");
-    Serial.println(pClient->getPeerAddress().toString().c_str());
-    Serial.print("RSSI: ");
-    Serial.println(pClient->getRssi());
-
-    NimBLERemoteService *pSvc = nullptr;
-
-    if (pSvc = pClient->getService(HID_SERVICE))
-    {
-        std::vector<NimBLERemoteCharacteristic*> *chrvec = pSvc->getCharacteristics(true);
-        for(auto &it: *chrvec)
-        {
-            if (it->getUUID() == NimBLEUUID(HID_REPORT_DATA))
+            hid_descriptor_it++; // イテレータを保存
+          }
+          if (hid_descriptor_it == hid_descriptors.end()) // HID Reportのイテレータを進める
+          {
+            hid_descriptors.clear(); // HID Reportのイテレータをクリア
+            while (hid_characteristic_it != hid_characteristics.end())
             {
-                //Serial.println(it->toString().c_str());
-                if (it->canNotify() /*&& (it->getHandle() == 41||it->getHandle() == 29)*/)
-                {
-                    //Serial.print("    Subcribe this...");
-                    if (!it->subscribe(true, notifyCallback))
-                    {
-                        Serial.println("Subscribe notification failed.");
-                        pClient->disconnect();
-                        return false;
-                    }
-                    //Serial.println("Subscribed.");
+              // HID ReportのUUIDを確認
+              if (hid_characteristic_it->uuid16 == 0x2a4d) { // UUIDがHID_REPORT_DATAの場合
+                uint16_t characteristic_handle = hid_characteristic_it->value_handle;
+                uint8_t properties = hid_characteristic_it->properties;
+                //display.printf("Found HID Report characteristic: %04x\n", it->value_handle);
+                if (properties & ATT_PROPERTY_NOTIFY) { // Notificationをサポートしているか確認
+                  cur_characteristic = *hid_characteristic_it; // HID Reportを保存
+                  gatt_client_discover_characteristic_descriptors(&handle_gatt_descriptors_discovered, connection_handle, &*hid_characteristic_it++);
+                  break;
                 }
+              }
+              hid_characteristic_it++; // イテレータを保存
             }
+            if (hid_characteristic_it == hid_characteristics.end())
+            {
+              gatt_client_listen_for_characteristic_value_updates(&notification_listener, 
+                &notification_handler, 
+                connection_handle, 
+                nullptr);
+            }
+          }
         }
-    }
+      }
+      break;
+    default:
+      break;
 
-    Serial.println("Done.");
-    return true;
+  }
 }
+
+// descriptor を見つけた
+static void
+handle_gatt_descriptors_discovered(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
+{
+  if (packet_type != HCI_EVENT_PACKET) return;
+  switch (hci_event_packet_get_type(packet)) 
+  {
+    case GATT_EVENT_ALL_CHARACTERISTIC_DESCRIPTORS_QUERY_RESULT:
+      {
+        // Descriptorの情報を取得
+        gatt_client_characteristic_descriptor_t descriptor;
+        gatt_event_all_characteristic_descriptors_query_result_get_characteristic_descriptor(packet, &descriptor);
+        hid_descriptors.push_back(descriptor); // HID Reportを保存
+      }
+      break;
+    case GATT_EVENT_QUERY_COMPLETE:
+      {
+        uint16_t status = gatt_event_query_complete_get_att_status(packet); // Replace with the correct function
+        if (status != 0) 
+        {
+          Serial.printf("GATT Descriptor query failed with status %u\n", status);
+        } 
+        else 
+        {
+          // Notificationを有効化する値を書き込む
+          hci_con_handle_t connection_handle = gatt_event_query_complete_get_handle(packet);
+          for(hid_descriptor_it = hid_descriptors.begin(); hid_descriptor_it != hid_descriptors.end(); ++hid_descriptor_it) 
+          {
+            uint16_t uuid16 = hid_descriptor_it->uuid16;
+            if (uuid16 == 0)
+            {
+              uuid16 = little_endian_read_16(hid_descriptor_it->uuid128, 0);
+            }
+            if (uuid16 == 0x2902) 
+            { // UUIDがClient Characteristic Configurationの場合
+              gatt_cccd_descriptor = *hid_descriptor_it; // Client Characteristic Configuration Descriptorを保存
+              hid_descriptor_it++; // イテレータを保存
+              gatt_client_write_value_of_characteristic(&handle_gatt_noification_activated, connection_handle, gatt_cccd_descriptor.handle, sizeof(notification_enable), notification_enable);
+              break;
+            }
+          }
+          if (hid_descriptor_it == hid_descriptors.end()) 
+          {
+            hid_descriptors.clear(); // HID Reportのイテレータをクリア
+            while (hid_characteristic_it != hid_characteristics.end())
+            {
+              if (hid_characteristic_it->uuid16 == 0x2a4d) { // UUIDがHID_REPORT_DATAの場合
+                uint16_t characteristic_handle = hid_characteristic_it->value_handle;
+                uint8_t properties = hid_characteristic_it->properties;
+                if (properties & ATT_PROPERTY_NOTIFY) { // Notificationをサポートしているか確認
+                  cur_characteristic = *hid_characteristic_it; // HID Reportを保存
+                  hci_con_handle_t connection_handle = gatt_event_query_complete_get_handle(packet);
+                  gatt_client_discover_characteristic_descriptors(&handle_gatt_descriptors_discovered, connection_handle, &*hid_characteristic_it++);
+                  break;
+                }
+              }
+              ++hid_characteristic_it; // イテレータを保存
+            }
+          }
+        }
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+// Characteristicを見つけた。
+static void
+handle_gatt_characteristics_discovered(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
+{
+  if (packet_type != HCI_EVENT_PACKET) return;
+  switch (hci_event_packet_get_type(packet)) {
+    case GATT_EVENT_CHARACTERISTIC_QUERY_RESULT:
+      {
+        gatt_client_characteristic_t characteristic;
+        gatt_event_characteristic_query_result_get_characteristic(packet, &characteristic);
+        uint16_t characteristic_handle = characteristic.value_handle;
+        uint8_t properties = characteristic.properties;
+        hid_characteristics.push_back(characteristic); // HID Reportを保存
+      }
+      break;
+    case GATT_EVENT_QUERY_COMPLETE:
+      {
+        uint16_t status = gatt_event_query_complete_get_att_status(packet); // Replace with the correct function
+        if (status != 0) {
+          Serial.printf("GATT Characteristcis query failed with status %u\n", status);
+        } else {
+          for(hid_characteristic_it = hid_characteristics.begin(); hid_characteristic_it != hid_characteristics.end(); ++hid_characteristic_it) 
+          {
+            // HID ReportのUUIDを確認
+            if (hid_characteristic_it->uuid16 == 0x2a4d) { // UUIDがHID_REPORT_DATAの場合
+              uint16_t characteristic_handle = hid_characteristic_it->value_handle;
+              uint8_t properties = hid_characteristic_it->properties;
+              if (properties & ATT_PROPERTY_NOTIFY) { // Notificationをサポートしているか確認
+                hci_con_handle_t connection_handle = gatt_event_query_complete_get_handle(packet);
+                gatt_client_discover_characteristic_descriptors(&handle_gatt_descriptors_discovered, connection_handle, &*hid_characteristic_it++);
+                break;
+              }
+            }
+          }
+        }
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+// GATT関連のイベントの入り口
+static void
+handle_gatt_client_event(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
+{
+  switch(hci_event_packet_get_type(packet)) {
+    case GATT_EVENT_SERVICE_QUERY_RESULT:
+        {
+          // サービスのUUIDを取得
+          gatt_client_service_t service;
+          gatt_event_service_query_result_get_service(packet, &service);
+          hci_con_handle_t connection_handle = gatt_event_service_query_result_get_handle(packet);
+          uint16_t uuid16 = service.uuid16;
+          const uint8_t *uuid128 = service.uuid128;
+      
+          if (uuid16 == 0)
+          {
+            uuid16 = little_endian_read_16(uuid128, 0);
+          }
+          if (uuid16 == HID_SERVICE_UUID) {
+            // characteristicを探索するのはGATT_EVENT_QUERY_COMPLETEで行う必要がある。
+            hid_service = service; // HIDサービスを保存
+          }
+        }
+        break;
+    case GATT_EVENT_QUERY_COMPLETE:
+        {
+          uint16_t status = gatt_event_query_complete_get_att_status(packet); // Replace with the correct function
+          if (status != 0) {
+            Serial.printf("GATT query failed with status %u\n", status);
+          } else {
+            if (hid_characteristics_scan_completed) break; // HID Reportの探索が完了している場合はスキップ
+            // GATTクライアントのサービスを探索する
+            hci_con_handle_t connection_handle = gatt_event_query_complete_get_handle(packet); // Retrieve connection handle
+            gatt_client_discover_characteristics_for_service(&handle_gatt_characteristics_discovered, connection_handle, &hid_service); // GATT event handler
+          }
+        }
+        break;
+    default:
+      break;
+  }
+}
+
+// SMイベントハンドラ
+static void
+sm_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) {
+  if (packet_type != HCI_EVENT_PACKET) return;
+
+  switch (hci_event_packet_get_type(packet)) 
+  {
+    case SM_EVENT_JUST_WORKS_REQUEST:
+      {
+        // Just Works Confirmを自動的に承認
+        bd_addr_t addr;
+        sm_event_just_works_request_get_address(packet, addr); // アドレスを取得
+        sm_just_works_confirm(sm_event_just_works_request_get_handle(packet));
+        break;
+      }
+    case SM_EVENT_PAIRING_STARTED:
+      break;
+    case SM_EVENT_PAIRING_COMPLETE: 
+    {
+      uint8_t status = sm_event_pairing_complete_get_status(packet);
+      if (status == ERROR_CODE_SUCCESS) 
+      {
+        hci_con_handle_t connection_handle = sm_event_pairing_complete_get_handle(packet);
+        gatt_client_discover_primary_services_by_uuid16(&handle_gatt_client_event, connection_handle, HID_SERVICE_UUID);  // GATT event handler
+      } 
+      else 
+      {
+        Serial.printf("Pairing failed with status %u.\n", status);
+      }
+      break;
+    }
+    case SM_EVENT_REENCRYPTION_STARTED:
+      {
+        // 再暗号化が開始された場合の処理
+        bd_addr_t addr;
+        sm_event_reencryption_started_get_address(packet, addr); // アドレスを取得
+        uint8_t addr_type = sm_event_reencryption_started_get_addr_type(packet);
+        break;
+      }
+    case SM_EVENT_REENCRYPTION_COMPLETE:
+      {
+        // 再暗号化が完了した場合の処理
+        uint8_t status = sm_event_reencryption_complete_get_status(packet);
+        if(status != ERROR_CODE_SUCCESS) {
+          Serial.printf("Re-encryption failed.(%d)\n", status);
+        }
+        break;
+      }
+    default:
+      break;
+  }
+}
+
+// HCIイベントハンドラ
+static void
+packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) 
+{
+  if (packet_type != HCI_EVENT_PACKET) return;
+  switch (hci_event_packet_get_type(packet)) 
+  {
+    case BTSTACK_EVENT_STATE:
+      if (btstack_event_state_get_state(packet) == HCI_STATE_WORKING) {
+        bd_addr_t local_address;
+        gap_local_bd_addr(local_address);
+        gap_set_scan_parameters(0, 0x0030, 0x0030);
+        gap_start_scan();
+      }
+      break;
+    case GAP_EVENT_ADVERTISING_REPORT:
+      {
+        gap_event_advertising_report_get_address(packet, keyboard_address);
+        bd_addr_type_t address_type = static_cast<bd_addr_type_t>(gap_event_advertising_report_get_address_type(packet));
+        uint8_t rssi = gap_event_advertising_report_get_rssi(packet);
+        uint8_t data_length = gap_event_advertising_report_get_data_length(packet);
+        scan_advertisements(gap_event_advertising_report_get_data(packet), gap_event_advertising_report_get_data_length(packet));
+        if (found_hid_device) {
+          gap_stop_scan();
+          gap_connect(keyboard_address, address_type);
+          found_hid_device = 0; // リセット
+        }
+        break;
+      }
+    case HCI_EVENT_DISCONNECTION_COMPLETE:
+      gap_start_scan(); // 再スキャン開始
+      break;
+    case HCI_EVENT_LE_META:
+      if (hci_event_le_meta_get_subevent_code(packet) == HCI_SUBEVENT_LE_CONNECTION_COMPLETE) 
+      {
+        // 暗号化を有効化
+        hci_con_handle_t connection_handle = gap_subevent_le_connection_complete_get_connection_handle(packet);
+        gap_request_security_level(connection_handle, LEVEL_2);
+        sm_request_pairing(connection_handle);
+      }
+      break;
+    case HCI_EVENT_ENCRYPTION_CHANGE:
+      if (!hci_event_encryption_change_get_encryption_enabled(packet)) 
+      {
+        Serial.printf("Encryption failed.\n");
+      }
+      break;
+    default: 
+      break;
+  }
+}
+
+bool BLEKeyBoard::_initialied = false;
 
 void
-BTKeyBoard::begin()
+BLEKeyBoard::begin()
 {
-    NimBLEDevice::init("");
-    NimBLEDevice::setSecurityAuth(true, true, true);
-    //NimBLEDevice::setSecurityIOCap(BLE_HS_IO_KEYBOARD_ONLY);
-    NimBLEDevice::setPower(ESP_PWR_LVL_P9);
-    NimBLEScan *pScan = NimBLEDevice::getScan();
-    pScan->setAdvertisedDeviceCallbacks(new AdvertisedDeviceCallbacks());
-    pScan->setInterval(45);
-    pScan->setWindow(15);
-    pScan->setActiveScan(true);
-    //pScan->setDuplicateFilter(true);
-    //Serial.printf("Scan %d millisecond(s).\r\n", scanTime);
-    pScan->start(scanTime);
+  // プロトコルの初期化
+  btstack_memory_init(); // Initialize BTstack memory
+  //hci_init(hci_transport_cyw43_instance(), nullptr); // Initialize HCI
+  l2cap_init();                     // L2CAPの初期化
+  gatt_client_init();               // GATTクライアントの初期化
+  sm_init();                        // セキュリティマネージャの初期化
+  btstack_crypto_init();          	// 暗号化の初期化
+  sm_set_request_security(true); 	// セキュリティ要求を有効化
+  sm_set_io_capabilities(IO_CAPABILITY_NO_INPUT_NO_OUTPUT); // IOキャパビリティ設定
+  sm_set_authentication_requirements(SM_AUTHREQ_SECURE_CONNECTION); // 認証要件を設定
+  sm_set_encryption_key_size_range(7, 16); // 暗号化キーサイズの範囲を設定
+  
+  // イベントハンドラの登録
+  hci_event_callback_registration.callback = &packet_handler;
+  hci_add_event_handler(&hci_event_callback_registration);
+  sm_event_callback_registration.callback = &sm_event_handler;
+  sm_add_event_handler(&sm_event_callback_registration);
+
+  hci_power_control(HCI_POWER_ON);  // BLEモジュールの電源ON
+
+  BLEKeyBoard::_initialied = true; // 初期化完了フラグを立てる
 }
 
-void
-BTKeyBoard::update()
+bool 
+BLEKeyBoard::wait_any_key()
 {
-    if(doConnect)
-    {
-        doConnect = false;
-        if (!connectToServer())
-        {
-            NimBLEDevice::getScan()->start(scanTime);
-        }
-    }
-    if (!connected)
-    {
-        Serial.println("Start scan.");
-        NimBLEDevice::getScan()->start(scanTime);
-    }
-    while (!keybuf.empty())
-    {
-        uint16_t k = keybuf.front();
-        uint8_t  m = (uint8_t)(k >> 8) & 3;
-        k &= 0xff;
-        if (m == 3) m = 1;
-        if (k < MAX_KEYCODE)
-        {
-            uint8_t  c = _keymap[m][k];
-            if (c) _buf.push(c);
-        }
-        keybuf.pop();
-    }
+	if (keybuf.empty()) return false;
+	keybuf.pop();
+	return true;
 }
 
-bool
-BTKeyBoard::wait_any_key()
+bool 
+BLEKeyBoard::fetch_key(uint8_t &c)
 {
-    update();
-    if (_buf.empty()) return false;
-    _buf.pop(); // just drop one key stroke.
-    return true;
-}
-
-bool
-BTKeyBoard::fetch_key(uint8_t &c)
-{
-    update();
-    if (_buf.empty()) return false;
-    c = _buf.front();
-    _buf.pop();
-    return true;
-}
-
-bool
-BTKeyBoard::exists()
-{
-    return true;
+	if (keybuf.empty()) return false;
+	c = keybuf.front();
+	keybuf.pop();
+	return true;
 }
 
 #endif
