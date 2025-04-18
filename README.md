@@ -22,11 +22,15 @@ data フォルダの中身を、SDカードのルートフォルダにコピー�
 |env:pico2_lcd28|Pico Res-Touch LCD 2.8 + USBキーボード|Pico2/Pico2W|
 |env:pico1_lcd28_ble|Pico Res-Touch LCD 2.8 + BLEキーボード|Pico W|
 |env:pico2_lcd28_ble|Pico Res-Touch LCD 2.8 + BLEキーボード|Pico2W|
+|env:pico1_lcd35|Pico Res-Touch LCD 3.5 + USBキーボード|Pico/Pico W|
+|env:pico2_lcd35|Pico Res-Touch LCD 3.5 + USBキーボード|Pico2/Pico2W|
+|env:pico1_lcd35_ble|Pico Res-Touch LCD 3.5 + BLEキーボード|Pico W|
+|env:pico2_lcd35_ble|Pico Res-Touch LCD 3.5 + BLEキーボード|Pico2W|
 
 Pico w + BLEキーボードの組み合わせはちょっと動きが怪しいので推奨しません。
 
 ## 予定
-Pico Res-Touch LCD 3.5も発注したので、到着したらそれ用のコードも追加する予定です。
+~~Pico Res-Touch LCD 3.5も発注したので、到着したらそれ用のコードも追加する予定です。~~
 
 ## 制限
 

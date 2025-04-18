@@ -40,7 +40,7 @@ setup()
     //Serial1.println("SD Wait ...");
     delay(500);
   }
-#elif defined(LCD28)
+#elif defined(LCD28)||defined(LCD35)
   // init SD
   SPI1.setTX(11);
   SPI1.setSCK(10);

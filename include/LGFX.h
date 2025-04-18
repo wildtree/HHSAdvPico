@@ -20,7 +20,7 @@
 //#define Rst_LCD_RST 15
 //#define Rst_LCD_BL  13
 
-#if defined(LCD28)
+#if defined(LCD28)||defined(LCD35)
 namespace lgfx
 {
     inline namespace v1
@@ -58,10 +58,12 @@ class LGFX : public lgfx::LGFX_Device
 public:
     LGFX();
 protected:
-#if defined(PICOCALC)
+#if defined(PICOCALC)||defined(LCD35)
     lgfx::Panel_ILI9488 _panel_instance; // ILI9488 panel
     lgfx::Bus_SPI _bus_instance; // SPI bus instance
-    //lgfx::Light_PWM _light_instance; // Backlight instance
+#if defined(LCD35)
+    lgfx::Light _light_instance; // Backlight instance
+#endif
     //lgfx::Touch_FT6X36 _touch_instance; // Touch instanceL
 #elif defined(LCD28)
     lgfx::Panel_ST7789 _panel_instance;

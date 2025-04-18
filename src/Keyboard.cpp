@@ -395,6 +395,7 @@ static btstack_packet_callback_registration_t hci_event_callback_registration;
 static btstack_packet_callback_registration_t sm_event_callback_registration;
 
 static gatt_client_notification_t notification_listener;
+static bool secure_connection = true;
 
 const uint32_t FIXED_PASSKEY = 123456U; // パスキーの固定値
 const uint16_t HID_SERVICE_UUID = 0x1812;
@@ -469,6 +470,20 @@ scan_advertisements(const uint8_t *packet, uint16_t size)
     // 広告データの反復処理
     for (ad_iter.data = packet, ad_iter.size = size, ad_iter.offset = 0 ; ad_iter.offset < ad_iter.size ; ad_data_iterator_next(&ad_iter)) 
     {
+      if (ad_iter.data[ad_iter.offset + 1] == BLUETOOTH_DATA_TYPE_SHORTENED_LOCAL_NAME||
+          ad_iter.data[ad_iter.offset + 1] == BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME) 
+      {
+        // デバイス名を取得
+        char device_name[32];
+        memcpy(device_name, &ad_iter.data[ad_iter.offset + 2], ad_iter.data[ad_iter.offset] - 1);
+        device_name[ad_iter.data[ad_iter.offset] - 1] = '\0';
+        if (strstr(device_name, "M5-Keyboard") != NULL) 
+        {
+          secure_connection = false; // セキュアコネクションを無効化
+          continue;
+        }
+      }
+      // 16ビットUUIDを確認
       if (ad_iter.data[ad_iter.offset + 1] == BLUETOOTH_DATA_TYPE_COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS ||
           ad_iter.data[ad_iter.offset + 1] == BLUETOOTH_DATA_TYPE_INCOMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS) 
       {
@@ -476,7 +491,7 @@ scan_advertisements(const uint8_t *packet, uint16_t size)
         if (uuid == HID_SERVICE_UUID) 
         {
           found_hid_device = 1;
-          break;
+          continue;
         }
       }
     }
@@ -842,7 +857,16 @@ packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t 
         // 暗号化を有効化
         hci_con_handle_t connection_handle = gap_subevent_le_connection_complete_get_connection_handle(packet);
         gap_request_security_level(connection_handle, LEVEL_2);
-        sm_request_pairing(connection_handle);
+        if (secure_connection) 
+        {
+          // セキュアコネクションを有効化
+          sm_request_pairing(connection_handle);
+        } 
+        else 
+        {
+          // get primary service
+          gatt_client_discover_primary_services_by_uuid16(&handle_gatt_client_event, connection_handle, HID_SERVICE_UUID);  // GATT event handler
+        }
       }
       break;
     case HCI_EVENT_ENCRYPTION_CHANGE:

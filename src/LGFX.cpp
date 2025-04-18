@@ -1,6 +1,6 @@
 #include <LGFX.h>
 
-#if defined(LCD28)
+#if defined(LCD28)||defined(LCD35)
 namespace lgfx
 {
  inline namespace v1
@@ -36,11 +36,12 @@ namespace lgfx
 
 LGFX::LGFX()
 {
-#if defined(PICOCALC)
+#if defined(PICOCALC)||defined(LCD35)
     {
         auto cfg = _bus_instance.config();
         cfg.spi_host = 1; // SPI1 for pico/pico2
         cfg.spi_mode = 0; // SPI mode 0
+#if defined(PICOCALC)
         cfg.freq_write = 50000000; // SPI write frequency
         cfg.freq_read = 25000000; // SPI read frequency
 
@@ -48,12 +49,21 @@ LGFX::LGFX()
         cfg.pin_mosi = 11; // MOSI pin
         cfg.pin_miso = 12; // MISO pin
         cfg.pin_dc   = 14; // DC pin
+#elif defined(LCD35)
+        cfg.freq_write = 40000000;
+        cfg.freq_read = 2000000;
 
+        cfg.pin_sclk = 10;
+        cfg.pin_mosi = 11;
+        cfg.pin_miso = 12;
+        cfg.pin_dc = 8;
+#endif
         _bus_instance.config(cfg); // Apply bus configuration
         _panel_instance.setBus(&_bus_instance); // Set bus to panel instance
     }
     {
         auto cfg = _panel_instance.config();
+#if defined(PICOCALC)
         cfg.pin_cs = 13; // CS pin
         cfg.pin_rst = 15; // RST pin
         cfg.pin_busy = -1; // No busy pin
@@ -74,18 +84,40 @@ LGFX::LGFX()
 
         cfg.invert = true; // inversion
         cfg.rgb_order = false; // RGB order
+#elif defined(LCD35)
+        cfg.pin_cs = 9;
+        cfg.pin_rst = 15;
+        cfg.pin_busy = -1;
 
+        cfg.memory_width = 320;
+        cfg.memory_height = 480;
+        cfg.panel_width = 320;
+        cfg.panel_height = 480;
+
+        cfg.offset_x = 0;
+        cfg.offset_y = 0;
+        cfg.offset_rotation = 0;
+
+        cfg.dummy_read_bits = 8;
+        cfg.dummy_read_pixel = 1;
+
+        cfg.readable = true;
+
+        cfg.invert = true;
+        cfg.rgb_order = false;
+        cfg.dlen_16bit = true;
+
+        cfg.bus_shared = true;
+#endif
         // cfg.bus_shared = true; // Bus shared
 
         _panel_instance.config(cfg); // Apply panel configuration
     }
-#if 0
+#if defined(LCD35)
     {
         auto cfg = _light_instance.config();
-        cfg.pin_bl = 4; // Backlight pin
+        cfg.pin_bl = 13; // Backlight pin
         cfg.invert = false; // No inversion
-        cfg.freq = 44100; // Frequency
-        cfg.pwm_channel = 0; // PWM channel
 
         _light_instance.config(cfg); // Apply backlight configuration
         _panel_instance.setLight(&_light_instance); // Set backlight to panel instance

@@ -12,7 +12,10 @@
 #ifdef PICOCALC
 #define SCRN_WIDTH (320)
 #define SCRN_HEIGHT (320)
-#else
+#elif defined(LCD35)
+#define SCRN_WIDTH (320)
+#define SCRN_HEIGHT (480)
+#elif defined(LCD28)
 #define SCRN_WIDTH (320)
 #define SCRN_HEIGHT (240)
 #endif

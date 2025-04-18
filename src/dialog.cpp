@@ -168,10 +168,10 @@ Dialog::draw(void)
         uint8_t c = 0;
         ZSystem::getInstance().getKeyboard()->fetch_key(c);
         if (c == '\x13')
-            {
-                ScreenShot::instance().take(ZSystem::getInstance().getDisplay());
-                continue;
-            }
+        {
+            ScreenShot::instance().take(ZSystem::getInstance().getDisplay());
+            continue;
+        }
         if (_btnA->is_pressed(c)||(b == 1 && (c == ' ' || c == 0x0d || c == 0x0a)))
         {
             _btnA->draw(true);
