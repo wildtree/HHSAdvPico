@@ -4,6 +4,7 @@
 
 #include <zsystem.h>
 #include <dialog.h>
+#include <screenshot.h>
 
 Button::Button()
     :_x(-1), _y(-1), _w(-1), _h(-1), _label(""), _enabled(false), _key(0)
@@ -52,12 +53,17 @@ Button::draw(bool is_pressed) const
         _canvas->fillRoundRect(_x, _y, _w, _h, 8, _canvas->color16to8(TFT_LIGHTGRAY));
         col = TFT_DARKGRAY;
     }
+    String s = _label;
+    if (s != String((char)_key))
+    {
+        s = String((char)_key) + String(". ") + _label;
+    }
     auto text_datum = _canvas->getTextDatum();
     auto font = _canvas->getFont();
     _canvas->setTextDatum(middle_center);
     _canvas->setFont(&fonts::lgfxJapanGothic_16);
     _canvas->setTextColor(_canvas->color16to8(col));
-    _canvas->drawString(_label, _x + _w / 2, _y + _h / 2);
+    _canvas->drawString(s, _x + _w / 2, _y + _h / 2);
     _canvas->setFont(font);
     _canvas->setTextDatum(text_datum);
 }
@@ -152,26 +158,35 @@ Dialog::draw(void)
     _btnB->draw();
     _btnC->draw();
 
+    int b =(_btnA->is_enabled() ? 1 : 0) +
+           (_btnB->is_enabled() ? 2 : 0) +
+           (_btnC->is_enabled() ? 4 : 0);
+
     invalidate();
     while(true)
     {
         uint8_t c = 0;
         ZSystem::getInstance().getKeyboard()->fetch_key(c);
-        if (_btnA->is_pressed(c))
+        if (c == '\x13')
+            {
+                ScreenShot::instance().take(ZSystem::getInstance().getDisplay());
+                continue;
+            }
+        if (_btnA->is_pressed(c)||(b == 1 && (c == ' ' || c == 0x0d || c == 0x0a)))
         {
             _btnA->draw(true);
             _result = 1;
             invalidate();
             break;
         }
-        if (_btnB->is_pressed(c))
+        if (_btnB->is_pressed(c)||(b == 2 && (c == ' ' || c == 0x0d || c == 0x0a)))
         {
             _btnB->draw(true);
             _result = 2;
             invalidate();
             break;
         }
-        if (_btnC->is_pressed(c))
+        if (_btnC->is_pressed(c)||(b == 4 && (c == ' ' || c == 0x0d || c == 0x0a)))
         {
             _btnC->draw(true);
             _result = 3;
