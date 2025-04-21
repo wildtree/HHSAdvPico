@@ -402,7 +402,7 @@ const uint16_t HID_SERVICE_UUID = 0x1812;
 const uint16_t HID_REPORT_ID = 0x2a4d; // HID Report ID
 
 // callback
-static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
+static void hci_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
 static void handle_gatt_descriptors_discovered(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
 
 typedef union {
@@ -821,7 +821,7 @@ sm_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_
 
 // HCIイベントハンドラ
 static void
-packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) 
+hci_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) 
 {
   if (packet_type != HCI_EVENT_PACKET) return;
   switch (hci_event_packet_get_type(packet)) 
@@ -898,7 +898,7 @@ BLEKeyBoard::begin()
   sm_set_encryption_key_size_range(7, 16); // 暗号化キーサイズの範囲を設定
   
   // イベントハンドラの登録
-  hci_event_callback_registration.callback = &packet_handler;
+  hci_event_callback_registration.callback = &hci_event_handler;
   hci_add_event_handler(&hci_event_callback_registration);
   sm_event_callback_registration.callback = &sm_event_handler;
   sm_add_event_handler(&sm_event_callback_registration);
