@@ -25,6 +25,13 @@ setup()
 {
   Serial1.begin(115200); // Serial1 for debug
   rp2040.begin();
+#if defined(LCD28)||defined(LCD35)
+  // 同じSPIにSDとLCDがぶら下がっているとき、両方のCSピンをOFF(HIGH)にすると安定するらしい。
+  pinMode(22, OUTPUT); // SD CS pin
+  pinMode(9, OUTPUT); // LCD CS pin
+  digitalWrite(22, HIGH);// OFF
+  digitalWrite(9, HIGH); // OFF
+#endif
   ZSystem &game = ZSystem::getInstance(); // game system
   // initialize SD interface
   //Serial1.println("HHSAdv PicoCalc Start ...");

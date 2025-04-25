@@ -386,7 +386,6 @@ static std::list<gatt_client_characteristic_t> hid_characteristics;
 static std::list<gatt_client_characteristic_descriptor_t> hid_descriptors;
 static std::list<gatt_client_characteristic_t>::iterator hid_characteristic_it;
 static std::list<gatt_client_characteristic_descriptor_t>::iterator hid_descriptor_it;
-static gatt_client_characteristic_t cur_characteristic;
 
 static gatt_client_characteristic_descriptor_t gatt_cccd_descriptor;
 static uint8_t notification_enable[] = {0x01, 0x00}; // 通知を有効化する値
@@ -400,6 +399,7 @@ static bool secure_connection = true;
 const uint32_t FIXED_PASSKEY = 123456U; // パスキーの固定値
 const uint16_t HID_SERVICE_UUID = 0x1812;
 const uint16_t HID_REPORT_ID = 0x2a4d; // HID Report ID
+const uint16_t CCCD_HANDLE_ID = 0x2902;
 
 // callback
 static void hci_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
@@ -571,7 +571,7 @@ handle_gatt_noification_activated(uint8_t packet_type, uint16_t channel, uint8_t
             {
               uuid16 = little_endian_read_16(hid_descriptor_it->uuid128, 0);
             }
-            if (uuid16 == 0x2902) // UUIDがClient Characteristic Configurationの場合
+            if (uuid16 == CCCD_HANDLE_ID) // UUIDがClient Characteristic Configurationの場合
             {
               gatt_cccd_descriptor = *hid_descriptor_it++; // Client Characteristic Configuration Descriptorを保存
               // Notificationを有効化する値を書き込む
@@ -591,7 +591,6 @@ handle_gatt_noification_activated(uint8_t packet_type, uint16_t channel, uint8_t
                 uint8_t properties = hid_characteristic_it->properties;
                 //display.printf("Found HID Report characteristic: %04x\n", it->value_handle);
                 if (properties & ATT_PROPERTY_NOTIFY) { // Notificationをサポートしているか確認
-                  cur_characteristic = *hid_characteristic_it; // HID Reportを保存
                   gatt_client_discover_characteristic_descriptors(&handle_gatt_descriptors_discovered, connection_handle, &*hid_characteristic_it++);
                   break;
                 }
@@ -648,7 +647,7 @@ handle_gatt_descriptors_discovered(uint8_t packet_type, uint16_t channel, uint8_
             {
               uuid16 = little_endian_read_16(hid_descriptor_it->uuid128, 0);
             }
-            if (uuid16 == 0x2902) 
+            if (uuid16 == CCCD_HANDLE_ID) 
             { // UUIDがClient Characteristic Configurationの場合
               gatt_cccd_descriptor = *hid_descriptor_it; // Client Characteristic Configuration Descriptorを保存
               hid_descriptor_it++; // イテレータを保存
@@ -665,13 +664,19 @@ handle_gatt_descriptors_discovered(uint8_t packet_type, uint16_t channel, uint8_
                 uint16_t characteristic_handle = hid_characteristic_it->value_handle;
                 uint8_t properties = hid_characteristic_it->properties;
                 if (properties & ATT_PROPERTY_NOTIFY) { // Notificationをサポートしているか確認
-                  cur_characteristic = *hid_characteristic_it; // HID Reportを保存
                   hci_con_handle_t connection_handle = gatt_event_query_complete_get_handle(packet);
                   gatt_client_discover_characteristic_descriptors(&handle_gatt_descriptors_discovered, connection_handle, &*hid_characteristic_it++);
                   break;
                 }
               }
               ++hid_characteristic_it; // イテレータを保存
+            }
+            if (hid_characteristic_it == hid_characteristics.end())
+            {
+              gatt_client_listen_for_characteristic_value_updates(&notification_listener, 
+                &notification_handler, 
+                connection_handle,  
+                nullptr);
             }
           }
         }
@@ -706,7 +711,7 @@ handle_gatt_characteristics_discovered(uint8_t packet_type, uint16_t channel, ui
           for(hid_characteristic_it = hid_characteristics.begin(); hid_characteristic_it != hid_characteristics.end(); ++hid_characteristic_it) 
           {
             // HID ReportのUUIDを確認
-            if (hid_characteristic_it->uuid16 == 0x2a4d) { // UUIDがHID_REPORT_DATAの場合
+            if (hid_characteristic_it->uuid16 == HID_REPORT_ID) { // UUIDがHID_REPORT_DATAの場合
               uint16_t characteristic_handle = hid_characteristic_it->value_handle;
               uint8_t properties = hid_characteristic_it->properties;
               if (properties & ATT_PROPERTY_NOTIFY) { // Notificationをサポートしているか確認
@@ -776,8 +781,6 @@ sm_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_
     case SM_EVENT_JUST_WORKS_REQUEST:
       {
         // Just Works Confirmを自動的に承認
-        bd_addr_t addr;
-        sm_event_just_works_request_get_address(packet, addr); // アドレスを取得
         sm_just_works_confirm(sm_event_just_works_request_get_handle(packet));
         break;
       }
@@ -828,8 +831,6 @@ hci_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16
   {
     case BTSTACK_EVENT_STATE:
       if (btstack_event_state_get_state(packet) == HCI_STATE_WORKING) {
-        bd_addr_t local_address;
-        gap_local_bd_addr(local_address);
         gap_set_scan_parameters(0, 0x0030, 0x0030);
         gap_start_scan();
       }

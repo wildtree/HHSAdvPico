@@ -1,7 +1,7 @@
 /*
  * Line Editor
  */
-#include <zsystem.h>
+#include <lineeditor.h>
 
 LineEditor::LineEditor(uint16_t size)
     : _size(size), _cursor(0), _tail(0)
