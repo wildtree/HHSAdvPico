@@ -24,6 +24,7 @@ void
 setup() 
 {
   Serial1.begin(115200); // Serial1 for debug
+  Serial.begin(115200); // Serial for USB
   rp2040.begin();
 #if defined(LCD28)||defined(LCD35)
   // 同じSPIにSDとLCDがぶら下がっているとき、両方のCSピンをOFF(HIGH)にすると安定するらしい。

@@ -8,13 +8,69 @@
 #include <zsystem.h>
 #include <dialog.h>
 #include <screenshot.h>
+#include <endroll.h>
 
-const String ZSystem::_credit[] = {
+const String ZSystem::_credit[] PROGMEM = {
     "ハイハイスクールアドベンチャー",
     "Copyright(c)1995-2025",
     "ZOBplus",  
     "hiro"
 };
+
+const std::string ending_message PROGMEM = u8R"(High High School Adventure
+
+PalmOS version: hiro © 2002-2004
+Android version: hiro © 2011-2025
+M5 version: hiro © 2023-2025
+Qt version: hiro © 2024
+PicoCalc version: hiro © 2025
+
+Project ZOBPlus
+Hayami <hayami@zob.jp>
+Exit <exit@zob.jp>
+ezumi <ezumi@zob.jp>
+Ogu <ogu@zob.jp>
+neopara <neopara@zob.jp>
+hiro <hiro@zob.jp>
+
+--- Original Staff ---
+Directed By HIRONOBU NAKAGUCHI
+Graphic Designers:
+
+NOBUKO YANAGITA
+YUMIKO HOSONO
+HIRONOBU NAKAGUCHI
+TOSHIHIKO YANAGITA
+TOHRU OHYAMA
+
+MASANORI ISHII
+YASUSHI SHIGEHARA
+HIDETOSHI SUZUKI
+TATSUYA UCHIBORI
+MASAKI NOZAWA
+
+TOMOKO OHKAWA
+FUMIKAZU SHIRATSUCHI
+YASUNORI YAMADA
+MUNENORI TAKIMOTO
+
+Message Converters:
+TATSUYA UCHIBORI
+HIDETOSHI SUZUKI
+YASUSHI SHIGEHARA
+YASUNORI YAMADA
+
+Floppy Disk Converters:
+HIRONOBU NAKAGUCHI
+Music:
+MASAO MIZOBE
+Special Thanks To:
+HIROSHI YAMAMOTO
+TAKAYOSHI KASHIWAGI
+Cooperate with:
+Furniture KASHIWAGI
+ZAMA HIGH SCHOOL MICRO COMPUTER CIRCLE
+)"; // 終了メッセージ
 
 ZSystem::ZSystem()
     : _dict(nullptr), _zmap(nullptr), _obj(nullptr), _user(nullptr), _msg(nullptr), _rules(nullptr),_mode(Title)
@@ -551,6 +607,11 @@ ZSystem::interpreter(void)
                                 draw_screen(false);
                                 break;
                             case 3: // game clear
+                                sleep_ms(5000);
+                                {
+                                    EndRoll endroll(ending_message);
+                                    endroll.run(_display);
+                                }
                                 break;
                             default:
                                 break;

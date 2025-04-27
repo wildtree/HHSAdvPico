@@ -6,7 +6,15 @@
 PicoCalcKeyBoard::PicoCalcKeyBoard()
     : KeyBoard(), _i2c_inited(1), _keycheck(0) 
 {
-#if 0
+  begin();
+}
+
+void
+PicoCalcKeyBoard::begin()
+{
+    _i2c_inited = 1;
+    _keycheck = 0;
+    #if 0
     Wire1.setSCL(I2C_KBD_SCL);
     Wire1.setSDA(I2C_KBD_SDA);
     Wire1.setClock(I2C_KBD_SPEED);
@@ -59,6 +67,7 @@ PicoCalcKeyBoard::_write_i2c_kbd()
     if ( retval == PICO_ERROR_GENERIC || retval == PICO_ERROR_TIMEOUT) 
     {
         Serial.printf( "i2c write error\r\n");
+        begin(); // try to wake up i2c bus
         return -1;
     }
     return 0;
@@ -88,6 +97,7 @@ PicoCalcKeyBoard::_read_i2c_kbd()
         if (retval == PICO_ERROR_GENERIC || retval == PICO_ERROR_TIMEOUT) 
         {
             Serial.printf("i2c read error read\n");
+            begin(); // try to wake up i2c bus
             return -1;
         }
         _keycheck = 0;
@@ -182,6 +192,14 @@ process_kbd_report(hid_keyboard_report_t const *report)
                 {
                     // キーコードが無効な場合、何もしない
                     continue;
+                }
+                if (report->modifier & (KEYBOARD_MODIFIER_LEFTCTRL|KEYBOARD_MODIFIER_RIGHTCTRL))
+                {
+                  uint8_t cz = ch | 0x20;
+                  if (cz >= 'a' && cz <= 'z')
+                  {
+                    ch = cz - 0x60;
+                  }
                 }
                 //sem_acquire_blocking(&keybuf_sem); // セマフォを取得
                 keybuf.push(ch); // キーコードをキューに追加
@@ -424,7 +442,7 @@ typedef union {
 static keyboard_t keyboardReport;
 static std::queue<uint8_t> keybuf;
 static const int MAX_KEYCODE = 96;
-const uint8_t keymap[][MAX_KEYCODE] = {
+const uint8_t keymap[][MAX_KEYCODE] PROGMEM = {
   {    0,   0,   0,   0, 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
      'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '1', '2',
      '3', '4', '5', '6', '7', '8', '9', '0',  13,  27,   8,   9, ' ', '-', '=', '[',

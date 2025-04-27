@@ -84,6 +84,7 @@ LGFX::LGFX()
 
         cfg.invert = true; // inversion
         cfg.rgb_order = false; // RGB order
+        cfg.dlen_16bit = false;
 #elif defined(LCD35)
         cfg.pin_cs = 9;
         cfg.pin_rst = 15;

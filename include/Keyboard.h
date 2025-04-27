@@ -56,6 +56,7 @@ protected:
     int _read_i2c_kbd(); 
     uint8_t _i2c_inited;
     uint8_t _keycheck;
+    void begin();
 };
 #endif
 
