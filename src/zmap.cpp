@@ -197,9 +197,21 @@ ZMapRoot::curMapData()
         //Serial1.printf("buffer is allocated: %08x\r\n", buf);
         f.seek(_p * fileBlockSize);
         //Serial1.printf("file pointer is moved to: %08x\r\n", _p * fileBlockSize);
+        //int size = 0;
         if (f.available())
         {
-            f.readBytes((char*)buf, fileBlockSize);
+#if 0
+            while (size < fileBlockSize && f.available())
+            {
+                int len = f.read(&buf[size], fileBlockSize - size);
+                if (len > 0)
+                {
+                    size += len;
+                }
+            }
+#else
+            f.read(buf, fileBlockSize);
+#endif
             if (_map != nullptr) delete _map;
             _map = new ZMapData(buf);
             if (_p == 0 || _p == 84 || _p == 85)

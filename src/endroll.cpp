@@ -31,6 +31,7 @@ EndRoll::run(lgfx::v1::LGFX_Device *display)
     _string->createSprite(display->width(), _lh);
     _string->setTextColor(_string->color16to8(TFT_CYAN), _string->color16to8(TFT_BLACK));
     _string->setFont(&fonts::lgfxJapanGothic_12);
+    _string->setTextDatum(lgfx::v1::textdatum::textdatum_t::top_center);
     _canvas = new LGFX_Sprite(display);
     _canvas->setColorDepth(8);
     _canvas->createSprite(display->width(), 160);
@@ -41,8 +42,7 @@ EndRoll::run(lgfx::v1::LGFX_Device *display)
     while (std::getline(messageStream, line, '\n')) 
     {
         _string->fillRect(0, 0, _string->width(), _string->height(), display->color16to8(TFT_BLACK));
-        _string->setCursor(0, 0);
-        _string->print(line.c_str());
+        _string->drawString(line.c_str(), _string->width() / 2, 0);
         for (int y = 0 ; y < _string->height() ; y++)
         {
             scrollLine();

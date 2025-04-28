@@ -25,7 +25,7 @@ M5 version: hiro © 2023-2025
 Qt version: hiro © 2024
 PicoCalc version: hiro © 2025
 
-Project ZOBPlus
+- Project ZOBPlus -
 Hayami <hayami@zob.jp>
 Exit <exit@zob.jp>
 ezumi <ezumi@zob.jp>
@@ -34,8 +34,11 @@ neopara <neopara@zob.jp>
 hiro <hiro@zob.jp>
 
 --- Original Staff ---
-Directed By HIRONOBU NAKAGUCHI
-Graphic Designers:
+
+- Director -
+HIRONOBU NAKAGUCHI
+
+- Graphic Designers -
 
 NOBUKO YANAGITA
 YUMIKO HOSONO
@@ -54,21 +57,25 @@ FUMIKAZU SHIRATSUCHI
 YASUNORI YAMADA
 MUNENORI TAKIMOTO
 
-Message Converters:
+- Message Converters -
 TATSUYA UCHIBORI
 HIDETOSHI SUZUKI
 YASUSHI SHIGEHARA
 YASUNORI YAMADA
 
-Floppy Disk Converters:
+- Floppy Disk Converters -
 HIRONOBU NAKAGUCHI
-Music:
+
+- Music -
 MASAO MIZOBE
-Special Thanks To:
+
+- Special Thanks To -
 HIROSHI YAMAMOTO
 TAKAYOSHI KASHIWAGI
-Cooperate with:
+
+- Cooperate with -
 Furniture KASHIWAGI
+
 ZAMA HIGH SCHOOL MICRO COMPUTER CIRCLE
 )"; // 終了メッセージ
 
@@ -434,14 +441,34 @@ ZSystem::load_game(int f)
     const String filename = "/HHSAdv/" + String(f) + ".dat";
     uint8_t *buf = new uint8_t [max(ZCore::packed_size, ZUserData::packed_size)];
     File fp = SD.open(filename, FILE_READ);
-    if (fp.read(buf,ZCore::packed_size) > 0)
+#if 0
+    int size = 0;
+    while (size < ZCore::packed_size && fp.available())
     {
-        _core->unpack(buf);
+        int len = fp.read(&buf[size], ZCore::packed_size - size);
+        if (len > 0)
+        {
+            size += len;
+        }
     }
-    if (fp.read(buf,ZUserData::packed_size) > 0)
+    _core->unpack(buf);
+    size = 0;
+    while(size < ZUserData::packed_size && fp.available())
     {
-        _user->unpack(buf);
+        int len = fp.read(&buf[size], ZUserData::packed_size - size);
+        if (len > 0)
+        {
+            size += len;
+        }
     }
+    _user->unpack(buf);
+#else
+    fp.read(buf, ZCore::packed_size);
+    _core->unpack(buf);
+    fp.read(buf, ZUserData::packed_size);
+    _user->unpack(buf);
+#endif
+
     fp.close();
     delete[] buf;
 }
