@@ -21,9 +21,14 @@ const std::string ending_message PROGMEM = u8R"(High High School Adventure
 
 PalmOS version: hiro © 2002-2004
 Android version: hiro © 2011-2025
+Web version: hiro © 2012-2025
 M5 version: hiro © 2023-2025
-Qt version: hiro © 2024
+Qt version: hiro © 2024-2025
 PicoCalc version: hiro © 2025
+SDL version: hiro © 2025
+Windows version: hiro © 2025
+AvaloniaUI version: hiro © 2025
+.NET MAUI version: hiro © 2025
 
 - Project ZOBPlus -
 Hayami <hayami@zob.jp>

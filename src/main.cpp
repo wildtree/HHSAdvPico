@@ -25,7 +25,7 @@ setup()
 {
   Serial1.begin(115200); // Serial1 for debug
   Serial.begin(115200); // Serial for USB
-  rp2040.begin();
+  rp2040.begin(0); // initialize core 0 only for now
 #if defined(LCD28)||defined(LCD35)
   // 同じSPIにSDとLCDがぶら下がっているとき、両方のCSピンをOFF(HIGH)にすると安定するらしい。
   pinMode(22, OUTPUT); // SD CS pin
