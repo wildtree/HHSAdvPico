@@ -53,9 +53,21 @@ setup()
   SPI1.setTX(11);
   SPI1.setSCK(10);
   SPI1.setRX(12);
-  //SPI1.setCS(22); // バスを共有しエイルからか、ここでSPI1.setCS()すると固まる。
+  //SPI1.setCS(22); // バスを共有しているからか、ここでSPI1.setCS()すると固まる。
   SPI1.begin();
   while (false == SD.begin(22, SPI1))
+  {
+    Serial1.println("SD Wait ...");
+    delay(500);
+  }
+#elif defined(LCD2)
+  // init SD
+  SPI1.setTX(27);
+  SPI1.setSCK(26);
+  SPI1.setRX(24);
+  SPI1.setCS(25);
+  SPI1.begin();
+  while (false == SD.begin(25, SPI1))
   {
     Serial1.println("SD Wait ...");
     delay(500);

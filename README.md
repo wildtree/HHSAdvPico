@@ -26,8 +26,11 @@ data フォルダの中身を、SDカードのルートフォルダにコピー�
 |env:pico2_lcd35|Pico Res-Touch LCD 3.5 + USBキーボード|Pico2/Pico2W|
 |env:pico1_lcd35_ble|Pico Res-Touch LCD 3.5 + BLEキーボード|Pico W|
 |env:pico2_lcd35_ble|Pico Res-Touch LCD 3.5 + BLEキーボード|Pico2W|
+|env:pico2_lcd2|RP2350-Touch-LCD2 + USBキーボード||
 
 Pico w + BLEキーボードの組み合わせはちょっと動きが怪しいので推奨しません。
+
+RP2350-Touch-LCD2は2インチ(320x240)のタッチパネルがついたRP2350ボードで、Raspberry Pi Pico2とソフトウェア互換性があります。（ピン配置などは互換ではない）
 
 ## 予定
 ~~Pico Res-Touch LCD 3.5も発注したので、到着したらそれ用のコードも追加する予定です。~~
@@ -101,3 +104,19 @@ NimBLE Arduinoは残念ながら Raspberry Pi Picoをサポートしていませ
 
 そして、例によって、この手のデバイスを、BLEペリフェラルにする用例は豊富にあっても、BLEセントラルにする用例は少なく、手探りでの開発となりました。
 デバッガが使えたのが本当に幸いで、デバッガがなければ動作させるには至らなかったと思います。
+
+## RP2350-Touch-LCD2 ボードについて
+
+[RP2350-Touch-LCD2](https://www.waveshare.com/wiki/RP2350-Touch-LCD-2?srsltid=AfmBOoox2cpSCdU-1koVtNPAe6SF0o27MnrmUw8xqimptRhNA0XS5ohf)はRP2350を搭載した2インチタッチパネルを持つボードで、Raspberry Pi Pico2とソフトウェア互換性があります。
+
+ピン配置はことなるので、そのまま差し替えて使うことはできないと思いますが、ソフトウェアは動きます。
+
+LCDパネルはST7789T3で、TFカードスロットがあるので、ハイハイスクールアドベンチャーの移植は簡単でした。
+
+ただ、LCDのピン配置などについては、ドキュメントも見当たらず、TFカードに至ってはサンプルすらない状態でしたが、ハードウェアのスキーマなどからGPIOピンへの割り当てを見て、設定を作りました。
+
+ほかのボード類とことなりSPI0側にLCDが、SPI1側にTFカードが割り当てられています。
+
+インターフェイスがUSB Type Cコネクタなので、今どきのPCと相性はいいと思います。
+Type CのOTGコネクタを使って、USBキーボードを接続してゲームを遊ぶことができます。
+ワイヤレス機能はないので、USBキーボードのみのコンフィグレーションとなっています。

@@ -12,7 +12,7 @@
 
 const String ZSystem::_credit[] PROGMEM = {
     "ハイハイスクールアドベンチャー",
-    "Copyright(c)1995-2025",
+    "Copyright(c)1995-2026",
     "ZOBplus",  
     "hiro"
 };
@@ -24,7 +24,7 @@ Android version: hiro © 2011-2025
 Web version: hiro © 2012-2025
 M5 version: hiro © 2023-2025
 Qt version: hiro © 2024-2025
-PicoCalc version: hiro © 2025
+PicoCalc version: hiro © 2025-2026
 SDL version: hiro © 2025
 Windows version: hiro © 2025
 AvaloniaUI version: hiro © 2025

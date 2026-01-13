@@ -20,7 +20,22 @@
 //#define Rst_LCD_RST 15
 //#define Rst_LCD_BL  13
 
-#if defined(LCD28)||defined(LCD35)
+// RP2350-Touch-LCD2
+//#define LCD_RST_PIN   20 // RX
+//#define LCD_DC_PIN    16
+//#define LCD_BL_PIN    15
+//#define LCD_CS_PIN    17
+//#define LCD_CLK_PIN   18
+//#define LCD_MOSI_PIN  19  // TX
+//#define DEV_SDA_PIN   12
+//#define DEV_SCL_PIN   13
+//#define DOF_INT1      14
+//#define Touch_RST_PIN 20
+//#define Touch_INT_PIN 29
+//#define BAT_ADC_PIN   28
+//#define BAR_CHANNEL   2
+
+#if defined(LCD28)||defined(LCD35)||defined(LCD2)
 namespace lgfx
 {
     inline namespace v1
@@ -70,6 +85,11 @@ protected:
     lgfx::Bus_SPI _bus_instance;
     lgfx::Light _light_instance;
     //lgfx::Touch_XPT2046 _touch_instance;
+#elif defined(LCD2)
+    lgfx::Panel_ST7789 _panel_instance;
+    lgfx::Bus_SPI _bus_instance;
+    lgfx::Light _light_instance;
+    //lgfx::Touch_CST816S _touch_instance;
 #endif
 };
 

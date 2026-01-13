@@ -1,6 +1,6 @@
 #include <LGFX.h>
 
-#if defined(LCD28)||defined(LCD35)
+#if defined(LCD28)||defined(LCD35)||defined(LCD2)
 namespace lgfx
 {
  inline namespace v1
@@ -172,6 +172,59 @@ LGFX::LGFX()
         auto cfg = _light_instance.config();
 
         cfg.pin_bl = 13;
+        cfg.invert = false;
+        //cfg.freq = 44100;
+
+        _light_instance.config(cfg);
+        _panel_instance.setLight(&_light_instance);
+    }
+#elif defined(LCD2)
+    {
+        auto cfg = _bus_instance.config();
+        cfg.spi_host = 0;
+        cfg.spi_mode = 0;
+        cfg.freq_write = 40000000;
+        cfg.freq_read = 6000000;
+
+        cfg.pin_sclk = 18;
+        cfg.pin_mosi = 19;
+        cfg.pin_miso = 20;
+        cfg.pin_dc = 16;
+
+        _bus_instance.config(cfg);
+        _panel_instance.setBus(&_bus_instance);
+    }
+    {
+        auto cfg = _panel_instance.config();
+        cfg.pin_cs = 17;
+        cfg.pin_rst = 20;
+        cfg.pin_busy = -1;
+
+        cfg.memory_width = 240;
+        cfg.memory_height = 320;
+        cfg.panel_width = 240;
+        cfg.panel_height = 320;
+
+        cfg.offset_x = 0;
+        cfg.offset_y = 0;
+        cfg.offset_rotation = 3;
+
+        cfg.dummy_read_bits = 8;
+        cfg.dummy_read_pixel = 1;
+
+        cfg.readable = true;
+
+        cfg.invert = true;
+        cfg.rgb_order = false;
+
+        cfg.bus_shared = true;
+
+        _panel_instance.config(cfg);
+    }
+    {
+        auto cfg = _light_instance.config();
+
+        cfg.pin_bl = 15;
         cfg.invert = false;
         //cfg.freq = 44100;
 
