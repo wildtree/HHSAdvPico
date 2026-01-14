@@ -786,6 +786,11 @@ ZSystem::loop(void)
                 ScreenShot::instance().take(_display);
                 return;
             }
+            if (c == '\x1e' || c == '\x1f')
+            {
+                _zvs->scroll((c == '\x1e') ? -1 : 1);
+                return;
+            }
             String cmd = _le->putChar(c);
             if (c == '\r' || c == '\n')
             {

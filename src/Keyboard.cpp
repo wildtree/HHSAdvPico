@@ -188,6 +188,14 @@ process_kbd_report(hid_keyboard_report_t const *report)
                 // 前回のレポートに同じキーが存在しない場合、キーが押された
                 bool is_shift = report->modifier & (KEYBOARD_MODIFIER_LEFTSHIFT | KEYBOARD_MODIFIER_RIGHTSHIFT);
                 uint8_t ch = keycode2ascii[report->keycode[i]][is_shift ? 1 : 0];
+                // 矢印キーの場合
+                switch (report->keycode[i]) 
+                {
+                    case 0x4f: ch = 0x1d; break; // Right Arrow
+                    case 0x50: ch = 0x1c; break; // Left Arrow
+                    case 0x51: ch = 0x1f; break; // Down Arrow
+                    case 0x52: ch = 0x1e; break; // Up Arrow
+                }
                 if (ch == 0) 
                 {
                     // キーコードが無効な場合、何もしない
@@ -447,8 +455,8 @@ const uint8_t keymap[][MAX_KEYCODE] PROGMEM = {
      'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '1', '2',
      '3', '4', '5', '6', '7', '8', '9', '0',  13,  27,   8,   9, ' ', '-', '=', '[',
      ']','\\',   0, ';','\'', '`', ',', '.', '/',   0,   0,   0,   0,   0,   0,   0,
-       0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 127,   0,   0,   0,
-       0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+       0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 127,   0,   0,  29,
+      28,  31,  30,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
   },
   {
        0,   0,   0,   0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,
@@ -463,8 +471,8 @@ const uint8_t keymap[][MAX_KEYCODE] PROGMEM = {
      'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '!', '@',
      '#', '$', '%', '^', '&', '*', '(', ')',  13,  27,   8,   9, ' ', '_', '+', '{',
      '}', '|',   0, ':', '"', '~', '<', '>', '?',   0,   0,   0,   0,   0,   0,   0,
-       0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 127,   0,   0,   0,
-       0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+       0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 127,   0,   0,  29,
+      28,  31,  30,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
   },
 };
 

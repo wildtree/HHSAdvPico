@@ -9,7 +9,7 @@
 // Instead of it, software scroll is implemented by this module.
 // Constructer
 ZVScroll::ZVScroll(lgfx::LGFX_Device *display, uint16_t top, uint16_t bottom)
-    :_display(display), _top(top), _bottom(bottom), _ty(0), _tx(0), _scale(1.0), _x(0), _y((int)top)
+    :_display(display), _top(top), _bottom(bottom), _ty(0), _tx(0), _scale(1.0), _x(0), _y((int)top), _line(String())
 {
     _h = YMax - _top - _bottom;
     _buf = new uint16_t [XMax];
@@ -31,6 +31,8 @@ ZVScroll::ZVScroll(lgfx::LGFX_Device *display, uint16_t top, uint16_t bottom)
     _scale = (sx < sy) ? sx : sy;
     _x = (uint16_t)(_display->width() - (uint16_t)(XMax * _scale)) / 2;
     _y = (uint16_t)(_display->height() - (uint16_t)(YMax * _scale)) / 2 + _top * _scale;
+    //
+    _lh = (int)(_h / FontHeight);
     cls();
 }
 
@@ -43,6 +45,16 @@ ZVScroll::~ZVScroll() {
 int
 ZVScroll::scrollLine()
 {
+    if (_line.isEmpty() == false)
+    {
+        if (_lines.size() >= Lines)
+        {
+            _lines.erase(_lines.begin());
+            if (--_ltop < 0) _ltop = 0;
+        }
+        _lines.push_back(_line);
+        _line = String();
+    }
     int ly = _ty + FontHeight;
     if (ly >= _h)
     {
@@ -54,6 +66,7 @@ ZVScroll::scrollLine()
         }
         _display->endWrite();
         ly = _ty;
+        _ltop++;
     }
     //Serial1.printf("clear line to be written: (%d)\n", _y);
     _canvas->fillRect(0, ly, XMax, FontHeight, _display->color16to8(TFT_BLACK));
@@ -64,7 +77,7 @@ ZVScroll::scrollLine()
 }
 
 void
-ZVScroll::print(const String &s)
+ZVScroll::drawString(const String &s)
 {
     //Serial1.printf("String: '%s' (length = %d)\n", s.c_str(), s.length());
     String t = s;
@@ -84,10 +97,12 @@ ZVScroll::print(const String &s)
             }
             _canvas->setFont(&fonts::AsciiFont8x16);
             _tx += _canvas->drawChar(t[i], _tx, _ty, 2);
+            _line += t[i];
         }
         else if (c >= 0x80 && c <= 0xbf) // UTF-8 letters (2nd or later byte letters)
         {
             _canvas->print(t[i]);
+            _line += t[i];
         }
         else
         {
@@ -98,11 +113,49 @@ ZVScroll::print(const String &s)
             _canvas->setFont(&fonts::lgfxJapanGothic_16);
             _canvas->setCursor(_tx, _ty);
             _canvas->print(t[i]);
+            _line += t[i];
             _tx += FontWidth * 2;
+        }
+    }
+
+    invalidate();
+    _canvas->setFont(&fonts::AsciiFont8x16);
+}
+
+void
+ZVScroll::drawLine(const String &s, int y)
+{
+    int tx = 0, ty = y;
+    for (int i = 0 ; i < s.length() ; i++)
+    {
+        uint8_t c = s[i];
+        if (isascii(c))
+        {
+            _canvas->setFont(&fonts::AsciiFont8x16);
+            tx += _canvas->drawChar(s[i], tx, ty, 2);
+        }
+        else if (c >= 0x80 && c <= 0xbf) // UTF-8 letters (2nd or later byte letters)
+        {
+            _canvas->print(s[i]);
+        }
+        else
+        {
+            _canvas->setFont(&fonts::lgfxJapanGothic_16);
+            _canvas->setCursor(tx, ty);
+            _canvas->print(s[i]);
+            tx += FontWidth * 2;
         }
     }
     invalidate();
     _canvas->setFont(&fonts::AsciiFont8x16);
+}
+
+void
+ZVScroll::print(const String &s)
+{
+    _ltop = _lines.size() - _lh;
+    if (_ltop < 0) _ltop = 0;
+    drawString(s);
 }
 
 void
@@ -111,7 +164,45 @@ ZVScroll::cls(void)
     _tx = 0;
     _ty = 0;
     _canvas->fillRect(0, 0, XMax, _h, _display->color16to8(TFT_BLACK));
+    _lines.clear();
+    _line = String();
+    _ltop = 0;
     invalidate();
+}
+
+void
+ZVScroll::redraw()
+{
+    _canvas->fillRect(0, 0, XMax, _h, _display->color16to8(TFT_BLACK));
+    int y = 0;
+    int i = _ltop;
+    while (y < _h)
+    {
+        if (i >= (int)_lines.size()) break;
+        drawLine(_lines[i++], y);
+        y += FontHeight;
+    }
+    //drawLine(_line, y);
+    invalidate();
+}
+
+void
+ZVScroll::scroll(int delta)
+{
+    if (_line.isEmpty() == false)
+    {
+        scrollLine();
+    }
+    int tmp = _ltop + delta;
+    if (tmp < 0) tmp = 0;
+    if (tmp > (int)_lines.size() - _lh)
+    {
+        tmp = (int)_lines.size() - _lh;
+        if (tmp < 0) tmp = 0;
+    }
+    if (tmp == _ltop) return;
+    _ltop = tmp;
+    redraw();
 }
 
 void 
